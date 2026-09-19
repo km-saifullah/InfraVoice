@@ -1,0 +1,38 @@
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Go build output
+/bin/
+/build/
+/dist/
+
+# Coverage
+coverage.out
+coverage.html
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+*.tfvars
+*.tfvars.json
+
+# Generated Terraform workspaces
+terraform/workspaces/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
