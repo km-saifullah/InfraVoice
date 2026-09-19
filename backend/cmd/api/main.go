@@ -14,6 +14,7 @@ import (
 
 	"github.com/km-saifullah/infra-voice/backend/internal/config"
 	"github.com/km-saifullah/infra-voice/backend/internal/database/mongodb"
+	redisdb "github.com/km-saifullah/infra-voice/backend/internal/database/redis"
 )
 
 func main() {
@@ -43,31 +44,41 @@ func main() {
 		log.Fatalf("failed to initialize mongodb database: %v", err)
 	}
 
-	defer func() {
-		shutdownContext, cancel := context.WithTimeout(
-			context.Background(),
-			5*time.Second,
-		)
-		defer cancel()
+	redisClient, err := redisdb.New(appContext, cfg.Redis)
+	if err != nil {
+		_ = mongoClient.Disconnect(context.Background())
 
-		if err := mongoClient.Disconnect(shutdownContext); err != nil {
-			log.Printf("mongodb disconnect error: %v", err)
-		}
-	}()
+		log.Fatalf("failed to initialize redis: %v", err)
+	}
 
 	router := gin.Default()
 
 	router.GET("/health", func(c *gin.Context) {
+		databaseStatus := "connected"
+
+		if mongoDatabase.Database() == nil {
+			databaseStatus = "disconnected"
+		}
+
+		redisStatus := "connected"
+
+		healthContext, cancel := context.WithTimeout(
+			c.Request.Context(),
+			2*time.Second,
+		)
+		defer cancel()
+
+		if err := redisClient.Ping(healthContext); err != nil {
+			redisStatus = "disconnected"
+		}
+
 		c.JSON(http.StatusOK, gin.H{
 			"status":  "ok",
 			"service": cfg.App.Name,
-			"database": func() string {
-				if mongoDatabase.Database() != nil {
-					return "connected"
-				}
-
-				return "disconnected"
-			}(),
+			"dependencies": gin.H{
+				"mongodb": databaseStatus,
+				"redis":   redisStatus,
+			},
 		})
 	})
 
@@ -94,7 +105,7 @@ func main() {
 	select {
 	case err := <-serverErrors:
 		if err != nil && err != http.ErrServerClosed {
-			log.Fatalf("server error: %v", err)
+			log.Printf("server error: %v", err)
 		}
 
 	case <-appContext.Done():
@@ -111,8 +122,12 @@ func main() {
 		log.Printf("http server shutdown error: %v", err)
 	}
 
+	if err := redisClient.Close(); err != nil {
+		log.Printf("redis shutdown error: %v", err)
+	}
+
 	if err := mongoClient.Disconnect(shutdownContext); err != nil {
-		log.Printf("mongodb disconnect error: %v", err)
+		log.Printf("mongodb shutdown error: %v", err)
 	}
 
 	log.Println("application shutdown completed")
