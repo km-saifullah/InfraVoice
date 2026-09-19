@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -37,6 +38,11 @@ func main() {
 		log.Fatalf("failed to initialize mongodb: %v", err)
 	}
 
+	mongoDatabase, err := mongodb.NewDatabase(mongoClient)
+	if err != nil {
+		log.Fatalf("failed to initialize mongodb database: %v", err)
+	}
+
 	defer func() {
 		shutdownContext, cancel := context.WithTimeout(
 			context.Background(),
@@ -51,23 +57,63 @@ func main() {
 
 	router := gin.Default()
 
-	router.GET("/health", healthHandler)
+	router.GET("/health", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{
+			"status":  "ok",
+			"service": cfg.App.Name,
+			"database": func() string {
+				if mongoDatabase.Database() != nil {
+					return "connected"
+				}
+
+				return "disconnected"
+			}(),
+		})
+	})
+
+	server := &http.Server{
+		Addr:         cfg.Address(),
+		Handler:      router,
+		ReadTimeout:  time.Duration(cfg.Server.ReadTimeoutSec) * time.Second,
+		WriteTimeout: time.Duration(cfg.Server.WriteTimeoutSec) * time.Second,
+		IdleTimeout:  time.Duration(cfg.Server.IdleTimeoutSec) * time.Second,
+	}
+
+	serverErrors := make(chan error, 1)
 
 	go func() {
-		if err := router.Run(cfg.Address()); err != nil {
-			log.Printf("server stopped: %v", err)
-			stop()
-		}
+		log.Printf(
+			"starting %s on %s",
+			cfg.App.Name,
+			cfg.Address(),
+		)
+
+		serverErrors <- server.ListenAndServe()
 	}()
 
-	<-appContext.Done()
+	select {
+	case err := <-serverErrors:
+		if err != nil && err != http.ErrServerClosed {
+			log.Fatalf("server error: %v", err)
+		}
 
-	log.Println("shutdown signal received")
-}
+	case <-appContext.Done():
+		log.Println("shutdown signal received")
+	}
 
-func healthHandler(c *gin.Context) {
-	c.JSON(200, gin.H{
-		"status":  "ok",
-		"service": "infra-voice-api",
-	})
+	shutdownContext, cancel := context.WithTimeout(
+		context.Background(),
+		10*time.Second,
+	)
+	defer cancel()
+
+	if err := server.Shutdown(shutdownContext); err != nil {
+		log.Printf("http server shutdown error: %v", err)
+	}
+
+	if err := mongoClient.Disconnect(shutdownContext); err != nil {
+		log.Printf("mongodb disconnect error: %v", err)
+	}
+
+	log.Println("application shutdown completed")
 }
