@@ -114,52 +114,94 @@ func (c Config) Validate() error {
 	var validationErrors []string
 
 	if strings.TrimSpace(c.App.Name) == "" {
-		validationErrors = append(validationErrors, "APP_NAME cannot be empty")
+		validationErrors = append(
+			validationErrors,
+			"APP_NAME cannot be empty",
+		)
 	}
 
 	if strings.TrimSpace(c.App.Env) == "" {
-		validationErrors = append(validationErrors, "APP_ENV cannot be empty")
+		validationErrors = append(
+			validationErrors,
+			"APP_ENV cannot be empty",
+		)
 	}
 
 	if c.Server.Port < 1 || c.Server.Port > 65535 {
-		validationErrors = append(validationErrors, "SERVER_PORT must be between 1 and 65535")
+		validationErrors = append(
+			validationErrors,
+			"SERVER_PORT must be between 1 and 65535",
+		)
 	}
 
 	if c.Server.ReadTimeoutSec <= 0 {
-		validationErrors = append(validationErrors, "SERVER_READ_TIMEOUT_SEC must be greater than 0")
+		validationErrors = append(
+			validationErrors,
+			"SERVER_READ_TIMEOUT_SEC must be greater than 0",
+		)
 	}
 
 	if c.Server.WriteTimeoutSec <= 0 {
-		validationErrors = append(validationErrors, "SERVER_WRITE_TIMEOUT_SEC must be greater than 0")
+		validationErrors = append(
+			validationErrors,
+			"SERVER_WRITE_TIMEOUT_SEC must be greater than 0",
+		)
 	}
 
 	if c.Server.IdleTimeoutSec <= 0 {
-		validationErrors = append(validationErrors, "SERVER_IDLE_TIMEOUT_SEC must be greater than 0")
+		validationErrors = append(
+			validationErrors,
+			"SERVER_IDLE_TIMEOUT_SEC must be greater than 0",
+		)
 	}
 
 	if strings.TrimSpace(c.MongoDB.URI) == "" {
-		validationErrors = append(validationErrors, "MONGODB_URI cannot be empty")
+		validationErrors = append(
+			validationErrors,
+			"MONGODB_URI cannot be empty",
+		)
 	}
 
 	if strings.TrimSpace(c.MongoDB.Database) == "" {
-		validationErrors = append(validationErrors, "MONGODB_DATABASE cannot be empty")
+		validationErrors = append(
+			validationErrors,
+			"MONGODB_DATABASE cannot be empty",
+		)
 	}
 
 	if c.Redis.DB < 0 {
-		validationErrors = append(validationErrors, "REDIS_DB cannot be negative")
+		validationErrors = append(
+			validationErrors,
+			"REDIS_DB cannot be negative",
+		)
+	}
+
+	if strings.TrimSpace(c.JWT.Secret) == "" {
+		validationErrors = append(
+			validationErrors,
+			"JWT_SECRET cannot be empty",
+		)
+	}
+
+	if len([]byte(c.JWT.Secret)) < 32 {
+		validationErrors = append(
+			validationErrors,
+			"JWT_SECRET must be at least 32 bytes",
+		)
 	}
 
 	if c.JWT.AccessTokenMinutes <= 0 {
-		validationErrors = append(validationErrors, "JWT_ACCESS_TOKEN_MINUTES must be greater than 0")
-	}
-
-	if strings.EqualFold(c.App.Env, "production") &&
-		strings.TrimSpace(c.JWT.Secret) == "" {
-		validationErrors = append(validationErrors, "JWT_SECRET is required in production")
+		validationErrors = append(
+			validationErrors,
+			"JWT_ACCESS_TOKEN_MINUTES must be greater than 0",
+		)
 	}
 
 	if c.Terraform.ExecutionTimeoutSec <= 0 {
-		validationErrors = append(validationErrors, "TERRAFORM_EXECUTION_TIMEOUT_SEC must be greater than 0")
+		validationErrors = append(
+			validationErrors,
+			"TERRAFORM_EXECUTION_TIMEOUT_SEC must be greater than 0",
+		)
 	}
 
 	if len(validationErrors) > 0 {

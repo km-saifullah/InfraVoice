@@ -14,20 +14,20 @@ import (
 )
 
 type HealthHandler struct {
-	config      config.Config
-	mongoClient *mongodb.Client
-	redisClient *redisdb.Client
+	config        config.Config
+	mongoDatabase *mongodb.Database
+	redisClient   *redisdb.Client
 }
 
 func NewHealthHandler(
 	cfg config.Config,
-	mongoClient *mongodb.Client,
+	mongoDatabase *mongodb.Database,
 	redisClient *redisdb.Client,
 ) *HealthHandler {
 	return &HealthHandler{
-		config:      cfg,
-		mongoClient: mongoClient,
-		redisClient: redisClient,
+		config:        cfg,
+		mongoDatabase: mongoDatabase,
+		redisClient:   redisClient,
 	}
 }
 
@@ -40,7 +40,7 @@ func (h *HealthHandler) Health(c *gin.Context) {
 
 	mongoStatus := "connected"
 
-	if err := h.mongoClient.Ping(ctx); err != nil {
+	if err := h.mongoDatabase.Client().Ping(ctx); err != nil {
 		mongoStatus = "disconnected"
 	}
 
@@ -53,7 +53,8 @@ func (h *HealthHandler) Health(c *gin.Context) {
 	statusCode := http.StatusOK
 	overallStatus := "ok"
 
-	if mongoStatus != "connected" || redisStatus != "connected" {
+	if mongoStatus != "connected" ||
+		redisStatus != "connected" {
 		statusCode = http.StatusServiceUnavailable
 		overallStatus = "degraded"
 	}
