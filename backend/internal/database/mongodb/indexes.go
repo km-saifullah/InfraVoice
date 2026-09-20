@@ -68,5 +68,36 @@ func EnsureIndexes(
 		)
 	}
 
+	infrastructureIndexes := []mongo.IndexModel{
+		{
+			Keys: bson.D{
+				bson.E{
+					Key:   "project_id",
+					Value: 1,
+				},
+				bson.E{
+					Key:   "updated_at",
+					Value: -1,
+				},
+			},
+			Options: options.Index().
+				SetName(
+					"infrastructure_specs_project_updated_at",
+				),
+		},
+	}
+
+	if _, err := database.InfrastructureSpecs().
+		Indexes().
+		CreateMany(
+			ctx,
+			infrastructureIndexes,
+		); err != nil {
+		return fmt.Errorf(
+			"failed to create infrastructure specification indexes: %w",
+			err,
+		)
+	}
+
 	return nil
 }

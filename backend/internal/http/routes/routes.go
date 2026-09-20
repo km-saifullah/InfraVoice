@@ -11,6 +11,7 @@ import (
 	redisdb "github.com/km-saifullah/infra-voice/backend/internal/database/redis"
 	"github.com/km-saifullah/infra-voice/backend/internal/http/handler"
 	"github.com/km-saifullah/infra-voice/backend/internal/http/middleware"
+	"github.com/km-saifullah/infra-voice/backend/internal/infrastructure"
 	"github.com/km-saifullah/infra-voice/backend/internal/project"
 	"github.com/km-saifullah/infra-voice/backend/internal/user"
 )
@@ -80,6 +81,22 @@ func Setup(
 		projectService,
 	)
 
+	infrastructureRepository :=
+		infrastructure.NewRepository(
+			mongoDatabase,
+		)
+
+	infrastructureService :=
+		infrastructure.NewService(
+			infrastructureRepository,
+			projectService,
+		)
+
+	infrastructureHandler :=
+		handler.NewInfrastructureHandler(
+			infrastructureService,
+		)
+
 	api := router.Group("/api/v1")
 
 	authRoutes := api.Group("/auth")
@@ -141,5 +158,39 @@ func Setup(
 	projectRoutes.DELETE(
 		"/:id",
 		projectHandler.Delete,
+	)
+
+	infrastructureRoutes := projectRoutes.Group(
+		"/:id/infrastructure",
+	)
+
+	infrastructureRoutes.POST(
+		"",
+		infrastructureHandler.Create,
+	)
+
+	infrastructureRoutes.GET(
+		"",
+		infrastructureHandler.List,
+	)
+
+	infrastructureRoutes.GET(
+		"/:spec_id",
+		infrastructureHandler.Get,
+	)
+
+	infrastructureRoutes.PATCH(
+		"/:spec_id",
+		infrastructureHandler.Update,
+	)
+
+	infrastructureRoutes.DELETE(
+		"/:spec_id",
+		infrastructureHandler.Delete,
+	)
+
+	infrastructureRoutes.POST(
+		"/:spec_id/validate",
+		infrastructureHandler.Validate,
 	)
 }
