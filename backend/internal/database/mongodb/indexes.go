@@ -9,9 +9,14 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
-func EnsureIndexes(ctx context.Context, database *Database) error {
+func EnsureIndexes(
+	ctx context.Context,
+	database *Database,
+) error {
 	if database == nil {
-		return fmt.Errorf("mongodb database is required")
+		return fmt.Errorf(
+			"mongodb database is required",
+		)
 	}
 
 	userIndexes := []mongo.IndexModel{
@@ -28,11 +33,39 @@ func EnsureIndexes(ctx context.Context, database *Database) error {
 		},
 	}
 
-	if _, err := database.Users().Indexes().CreateMany(
-		ctx,
-		userIndexes,
-	); err != nil {
-		return fmt.Errorf("failed to create user indexes: %w", err)
+	if _, err := database.Users().
+		Indexes().
+		CreateMany(ctx, userIndexes); err != nil {
+		return fmt.Errorf(
+			"failed to create user indexes: %w",
+			err,
+		)
+	}
+
+	projectIndexes := []mongo.IndexModel{
+		{
+			Keys: bson.D{
+				bson.E{
+					Key:   "owner_id",
+					Value: 1,
+				},
+				bson.E{
+					Key:   "created_at",
+					Value: -1,
+				},
+			},
+			Options: options.Index().
+				SetName("projects_owner_created_at"),
+		},
+	}
+
+	if _, err := database.Projects().
+		Indexes().
+		CreateMany(ctx, projectIndexes); err != nil {
+		return fmt.Errorf(
+			"failed to create project indexes: %w",
+			err,
+		)
 	}
 
 	return nil

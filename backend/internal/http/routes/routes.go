@@ -11,6 +11,7 @@ import (
 	redisdb "github.com/km-saifullah/infra-voice/backend/internal/database/redis"
 	"github.com/km-saifullah/infra-voice/backend/internal/http/handler"
 	"github.com/km-saifullah/infra-voice/backend/internal/http/middleware"
+	"github.com/km-saifullah/infra-voice/backend/internal/project"
 	"github.com/km-saifullah/infra-voice/backend/internal/user"
 )
 
@@ -67,6 +68,18 @@ func Setup(
 		authService,
 	)
 
+	projectRepository := project.NewRepository(
+		mongoDatabase,
+	)
+
+	projectService := project.NewService(
+		projectRepository,
+	)
+
+	projectHandler := handler.NewProjectHandler(
+		projectService,
+	)
+
 	api := router.Group("/api/v1")
 
 	authRoutes := api.Group("/auth")
@@ -99,5 +112,34 @@ func Setup(
 	authenticatedRoutes.GET(
 		"/auth/me",
 		authHandler.Me,
+	)
+
+	projectRoutes := authenticatedRoutes.Group(
+		"/projects",
+	)
+
+	projectRoutes.POST(
+		"",
+		projectHandler.Create,
+	)
+
+	projectRoutes.GET(
+		"",
+		projectHandler.List,
+	)
+
+	projectRoutes.GET(
+		"/:id",
+		projectHandler.Get,
+	)
+
+	projectRoutes.PATCH(
+		"/:id",
+		projectHandler.Update,
+	)
+
+	projectRoutes.DELETE(
+		"/:id",
+		projectHandler.Delete,
 	)
 }
