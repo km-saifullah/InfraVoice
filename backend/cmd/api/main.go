@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -15,6 +16,7 @@ import (
 	"github.com/km-saifullah/infra-voice/backend/internal/config"
 	"github.com/km-saifullah/infra-voice/backend/internal/database/mongodb"
 	redisdb "github.com/km-saifullah/infra-voice/backend/internal/database/redis"
+	"github.com/km-saifullah/infra-voice/backend/internal/http/routes"
 )
 
 func main() {
@@ -27,6 +29,15 @@ func main() {
 		log.Fatalf("failed to load configuration: %v", err)
 	}
 
+	logger := slog.New(
+		slog.NewJSONHandler(
+			os.Stdout,
+			&slog.HandlerOptions{
+				Level: slog.LevelInfo,
+			},
+		),
+	)
+
 	appContext, stop := signal.NotifyContext(
 		context.Background(),
 		os.Interrupt,
@@ -36,51 +47,35 @@ func main() {
 
 	mongoClient, err := mongodb.New(appContext, cfg.MongoDB)
 	if err != nil {
-		log.Fatalf("failed to initialize mongodb: %v", err)
-	}
+		logger.Error(
+			"failed to initialize mongodb",
+			"error", err,
+		)
 
-	mongoDatabase, err := mongodb.NewDatabase(mongoClient)
-	if err != nil {
-		log.Fatalf("failed to initialize mongodb database: %v", err)
+		os.Exit(1)
 	}
 
 	redisClient, err := redisdb.New(appContext, cfg.Redis)
 	if err != nil {
 		_ = mongoClient.Disconnect(context.Background())
 
-		log.Fatalf("failed to initialize redis: %v", err)
+		logger.Error(
+			"failed to initialize redis",
+			"error", err,
+		)
+
+		os.Exit(1)
 	}
 
-	router := gin.Default()
+	router := gin.New()
 
-	router.GET("/health", func(c *gin.Context) {
-		databaseStatus := "connected"
-
-		if mongoDatabase.Database() == nil {
-			databaseStatus = "disconnected"
-		}
-
-		redisStatus := "connected"
-
-		healthContext, cancel := context.WithTimeout(
-			c.Request.Context(),
-			2*time.Second,
-		)
-		defer cancel()
-
-		if err := redisClient.Ping(healthContext); err != nil {
-			redisStatus = "disconnected"
-		}
-
-		c.JSON(http.StatusOK, gin.H{
-			"status":  "ok",
-			"service": cfg.App.Name,
-			"dependencies": gin.H{
-				"mongodb": databaseStatus,
-				"redis":   redisStatus,
-			},
-		})
-	})
+	routes.Setup(
+		router,
+		cfg,
+		logger,
+		mongoClient,
+		redisClient,
+	)
 
 	server := &http.Server{
 		Addr:         cfg.Address(),
@@ -93,10 +88,11 @@ func main() {
 	serverErrors := make(chan error, 1)
 
 	go func() {
-		log.Printf(
-			"starting %s on %s",
-			cfg.App.Name,
-			cfg.Address(),
+		logger.Info(
+			"starting application",
+			"service", cfg.App.Name,
+			"address", cfg.Address(),
+			"environment", cfg.App.Env,
 		)
 
 		serverErrors <- server.ListenAndServe()
@@ -105,11 +101,14 @@ func main() {
 	select {
 	case err := <-serverErrors:
 		if err != nil && err != http.ErrServerClosed {
-			log.Printf("server error: %v", err)
+			logger.Error(
+				"http server error",
+				"error", err,
+			)
 		}
 
 	case <-appContext.Done():
-		log.Println("shutdown signal received")
+		logger.Info("shutdown signal received")
 	}
 
 	shutdownContext, cancel := context.WithTimeout(
@@ -119,16 +118,25 @@ func main() {
 	defer cancel()
 
 	if err := server.Shutdown(shutdownContext); err != nil {
-		log.Printf("http server shutdown error: %v", err)
+		logger.Error(
+			"http server shutdown error",
+			"error", err,
+		)
 	}
 
 	if err := redisClient.Close(); err != nil {
-		log.Printf("redis shutdown error: %v", err)
+		logger.Error(
+			"redis shutdown error",
+			"error", err,
+		)
 	}
 
 	if err := mongoClient.Disconnect(shutdownContext); err != nil {
-		log.Printf("mongodb shutdown error: %v", err)
+		logger.Error(
+			"mongodb shutdown error",
+			"error", err,
+		)
 	}
 
-	log.Println("application shutdown completed")
+	logger.Info("application shutdown completed")
 }

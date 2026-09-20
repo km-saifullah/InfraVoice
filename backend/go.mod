@@ -4,6 +4,7 @@ go 1.26.2
 
 require (
 	github.com/gin-gonic/gin v1.12.0
+	github.com/google/uuid v1.6.0
 	github.com/joho/godotenv v1.5.1
 	github.com/redis/go-redis/v9 v9.22.0
 	go.mongodb.org/mongo-driver/v2 v2.9.1
