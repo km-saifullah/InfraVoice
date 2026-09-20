@@ -33,15 +33,19 @@ type loginRequest struct {
 	Password string `json:"password"`
 }
 
+type refreshRequest struct {
+	RefreshToken string `json:"refresh_token"`
+}
+
+type logoutRequest struct {
+	RefreshToken string `json:"refresh_token"`
+}
+
 func (h *AuthHandler) Register(c *gin.Context) {
 	var request registerRequest
 
 	if err := c.ShouldBindJSON(&request); err != nil {
-		response.BadRequest(
-			c,
-			"invalid request body",
-		)
-
+		response.BadRequest(c, "invalid request body")
 		return
 	}
 
@@ -63,10 +67,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 			)
 
 		case errors.Is(err, auth.ErrInvalidInput):
-			response.BadRequest(
-				c,
-				err.Error(),
-			)
+			response.BadRequest(c, err.Error())
 
 		default:
 			response.InternalServerError(
@@ -90,15 +91,11 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	var request loginRequest
 
 	if err := c.ShouldBindJSON(&request); err != nil {
-		response.BadRequest(
-			c,
-			"invalid request body",
-		)
-
+		response.BadRequest(c, "invalid request body")
 		return
 	}
 
-	foundUser, accessToken, err := h.service.Login(
+	foundUser, accessToken, refreshToken, err := h.service.Login(
 		c.Request.Context(),
 		auth.LoginInput{
 			Email:    request.Email,
@@ -112,7 +109,6 @@ func (h *AuthHandler) Login(c *gin.Context) {
 				c,
 				"invalid email or password",
 			)
-
 			return
 		}
 
@@ -120,6 +116,50 @@ func (h *AuthHandler) Login(c *gin.Context) {
 			c,
 			"failed to authenticate user",
 		)
+		return
+	}
+
+	response.OK(
+		c,
+		gin.H{
+			"access_token":  accessToken,
+			"refresh_token": refreshToken,
+			"token_type":    "Bearer",
+			"user":          foundUser,
+		},
+	)
+}
+
+func (h *AuthHandler) Refresh(c *gin.Context) {
+	var request refreshRequest
+
+	if err := c.ShouldBindJSON(&request); err != nil {
+		response.BadRequest(c, "invalid request body")
+		return
+	}
+
+	currentUser, accessToken, refreshToken, err := h.service.Refresh(
+		c.Request.Context(),
+		auth.RefreshInput{
+			RefreshToken: request.RefreshToken,
+		},
+	)
+
+	if err != nil {
+		switch {
+		case errors.Is(err, auth.ErrRefreshTokenInvalid),
+			errors.Is(err, auth.ErrRefreshTokenExpired):
+			response.Unauthorized(
+				c,
+				"invalid or expired refresh token",
+			)
+
+		default:
+			response.InternalServerError(
+				c,
+				"failed to refresh authentication",
+			)
+		}
 
 		return
 	}
@@ -127,9 +167,45 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	response.OK(
 		c,
 		gin.H{
-			"access_token": accessToken,
-			"token_type":   "Bearer",
-			"user":         foundUser,
+			"access_token":  accessToken,
+			"refresh_token": refreshToken,
+			"token_type":    "Bearer",
+			"user":          currentUser,
+		},
+	)
+}
+
+func (h *AuthHandler) Logout(c *gin.Context) {
+	var request logoutRequest
+
+	if err := c.ShouldBindJSON(&request); err != nil {
+		response.BadRequest(c, "invalid request body")
+		return
+	}
+
+	if err := h.service.Logout(
+		c.Request.Context(),
+		request.RefreshToken,
+	); err != nil {
+		if errors.Is(err, auth.ErrRefreshTokenInvalid) {
+			response.BadRequest(
+				c,
+				"refresh token is required",
+			)
+			return
+		}
+
+		response.InternalServerError(
+			c,
+			"failed to logout",
+		)
+		return
+	}
+
+	response.OK(
+		c,
+		gin.H{
+			"message": "logout successful",
 		},
 	)
 }
@@ -142,7 +218,6 @@ func (h *AuthHandler) Me(c *gin.Context) {
 			c,
 			"authenticated user not found",
 		)
-
 		return
 	}
 
@@ -152,7 +227,6 @@ func (h *AuthHandler) Me(c *gin.Context) {
 			c,
 			"invalid authenticated user",
 		)
-
 		return
 	}
 
@@ -166,7 +240,6 @@ func (h *AuthHandler) Me(c *gin.Context) {
 			c,
 			"failed to load authenticated user",
 		)
-
 		return
 	}
 

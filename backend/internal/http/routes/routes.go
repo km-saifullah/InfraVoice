@@ -41,9 +41,17 @@ func Setup(
 		redisClient,
 	)
 
-	router.GET("/health", healthHandler.Health)
+	router.GET(
+		"/health",
+		healthHandler.Health,
+	)
 
 	jwtService := auth.NewJWTService(cfg.JWT)
+
+	sessionStore := auth.NewSessionStore(
+		redisClient.Client(),
+		cfg.JWT,
+	)
 
 	userRepository := user.NewRepository(
 		mongoDatabase,
@@ -52,6 +60,7 @@ func Setup(
 	authService := auth.NewService(
 		userRepository,
 		jwtService,
+		sessionStore,
 	)
 
 	authHandler := handler.NewAuthHandler(
@@ -62,8 +71,25 @@ func Setup(
 
 	authRoutes := api.Group("/auth")
 
-	authRoutes.POST("/register", authHandler.Register)
-	authRoutes.POST("/login", authHandler.Login)
+	authRoutes.POST(
+		"/register",
+		authHandler.Register,
+	)
+
+	authRoutes.POST(
+		"/login",
+		authHandler.Login,
+	)
+
+	authRoutes.POST(
+		"/refresh",
+		authHandler.Refresh,
+	)
+
+	authRoutes.POST(
+		"/logout",
+		authHandler.Logout,
+	)
 
 	authenticatedRoutes := api.Group("")
 	authenticatedRoutes.Use(

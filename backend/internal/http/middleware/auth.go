@@ -25,9 +25,7 @@ func Auth(jwtService *auth.JWTService) gin.HandlerFunc {
 				c,
 				"authorization token is required",
 			)
-
 			c.Abort()
-
 			return
 		}
 
@@ -39,9 +37,7 @@ func Auth(jwtService *auth.JWTService) gin.HandlerFunc {
 				c,
 				"invalid authorization header",
 			)
-
 			c.Abort()
-
 			return
 		}
 
@@ -51,9 +47,7 @@ func Auth(jwtService *auth.JWTService) gin.HandlerFunc {
 				c,
 				"invalid or expired access token",
 			)
-
 			c.Abort()
-
 			return
 		}
 
@@ -74,4 +68,52 @@ func UserID(c *gin.Context) (string, bool) {
 	userID, ok := value.(string)
 
 	return userID, ok
+}
+
+func Role(c *gin.Context) (string, bool) {
+	value, exists := c.Get(ContextRole)
+
+	if !exists {
+		return "", false
+	}
+
+	role, ok := value.(string)
+
+	return role, ok
+}
+
+func RequireRole(allowedRoles ...string) gin.HandlerFunc {
+	allowed := make(map[string]struct{}, len(allowedRoles))
+
+	for _, role := range allowedRoles {
+		role = strings.TrimSpace(role)
+
+		if role != "" {
+			allowed[role] = struct{}{}
+		}
+	}
+
+	return func(c *gin.Context) {
+		role, exists := Role(c)
+
+		if !exists {
+			response.Forbidden(
+				c,
+				"user role is not available",
+			)
+			c.Abort()
+			return
+		}
+
+		if _, allowedRole := allowed[role]; !allowedRole {
+			response.Forbidden(
+				c,
+				"insufficient permissions",
+			)
+			c.Abort()
+			return
+		}
+
+		c.Next()
+	}
 }

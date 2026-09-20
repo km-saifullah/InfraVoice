@@ -45,6 +45,7 @@ type RedisConfig struct {
 type JWTConfig struct {
 	Secret             string
 	AccessTokenMinutes int
+	RefreshTokenDays   int
 }
 
 type AIConfig struct {
@@ -88,6 +89,7 @@ func Load() (Config, error) {
 		JWT: JWTConfig{
 			Secret:             getEnv("JWT_SECRET", ""),
 			AccessTokenMinutes: getEnvInt("JWT_ACCESS_TOKEN_MINUTES", 15),
+			RefreshTokenDays:   getEnvInt("JWT_REFRESH_TOKEN_DAYS", 30),
 		},
 
 		AI: AIConfig{
@@ -114,17 +116,11 @@ func (c Config) Validate() error {
 	var validationErrors []string
 
 	if strings.TrimSpace(c.App.Name) == "" {
-		validationErrors = append(
-			validationErrors,
-			"APP_NAME cannot be empty",
-		)
+		validationErrors = append(validationErrors, "APP_NAME cannot be empty")
 	}
 
 	if strings.TrimSpace(c.App.Env) == "" {
-		validationErrors = append(
-			validationErrors,
-			"APP_ENV cannot be empty",
-		)
+		validationErrors = append(validationErrors, "APP_ENV cannot be empty")
 	}
 
 	if c.Server.Port < 1 || c.Server.Port > 65535 {
@@ -194,6 +190,13 @@ func (c Config) Validate() error {
 		validationErrors = append(
 			validationErrors,
 			"JWT_ACCESS_TOKEN_MINUTES must be greater than 0",
+		)
+	}
+
+	if c.JWT.RefreshTokenDays <= 0 {
+		validationErrors = append(
+			validationErrors,
+			"JWT_REFRESH_TOKEN_DAYS must be greater than 0",
 		)
 	}
 

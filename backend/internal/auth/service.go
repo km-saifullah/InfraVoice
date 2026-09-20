@@ -21,8 +21,9 @@ var (
 )
 
 type Service struct {
-	users *user.Repository
-	jwt   *JWTService
+	users    *user.Repository
+	jwt      *JWTService
+	sessions *SessionStore
 }
 
 type RegisterInput struct {
@@ -36,13 +37,19 @@ type LoginInput struct {
 	Password string
 }
 
+type RefreshInput struct {
+	RefreshToken string
+}
+
 func NewService(
 	users *user.Repository,
 	jwtService *JWTService,
+	sessionStore *SessionStore,
 ) *Service {
 	return &Service{
-		users: users,
-		jwt:   jwtService,
+		users:    users,
+		jwt:      jwtService,
+		sessions: sessionStore,
 	}
 }
 
@@ -54,7 +61,10 @@ func (s *Service) Register(
 	email := normalizeEmail(input.Email)
 
 	if name == "" {
-		return nil, fmt.Errorf("%w: name is required", ErrInvalidInput)
+		return nil, fmt.Errorf(
+			"%w: name is required",
+			ErrInvalidInput,
+		)
 	}
 
 	if len(name) > 100 {
@@ -117,43 +127,108 @@ func (s *Service) Register(
 func (s *Service) Login(
 	ctx context.Context,
 	input LoginInput,
-) (*user.User, string, error) {
+) (*user.User, string, string, error) {
 	email := normalizeEmail(input.Email)
 
 	if err := validateEmail(email); err != nil {
-		return nil, "", ErrInvalidCredentials
+		return nil, "", "", ErrInvalidCredentials
 	}
 
 	if input.Password == "" {
-		return nil, "", ErrInvalidCredentials
+		return nil, "", "", ErrInvalidCredentials
 	}
 
 	foundUser, err := s.users.FindByEmail(ctx, email)
 	if err != nil {
 		if errors.Is(err, user.ErrUserNotFound) {
-			return nil, "", ErrInvalidCredentials
+			return nil, "", "", ErrInvalidCredentials
 		}
 
-		return nil, "", err
+		return nil, "", "", err
 	}
 
 	if !foundUser.IsActive() {
-		return nil, "", ErrInvalidCredentials
+		return nil, "", "", ErrInvalidCredentials
 	}
 
 	if err := ComparePassword(
 		foundUser.PasswordHash,
 		input.Password,
 	); err != nil {
-		return nil, "", ErrInvalidCredentials
+		return nil, "", "", ErrInvalidCredentials
 	}
 
 	accessToken, err := s.jwt.GenerateAccessToken(foundUser)
 	if err != nil {
-		return nil, "", err
+		return nil, "", "", err
 	}
 
-	return foundUser, accessToken, nil
+	refreshToken, err := s.sessions.Create(
+		ctx,
+		foundUser,
+	)
+	if err != nil {
+		return nil, "", "", err
+	}
+
+	return foundUser, accessToken, refreshToken, nil
+}
+
+func (s *Service) Refresh(
+	ctx context.Context,
+	input RefreshInput,
+) (*user.User, string, string, error) {
+	userIDString, err := s.sessions.GetUserID(
+		ctx,
+		input.RefreshToken,
+	)
+	if err != nil {
+		return nil, "", "", err
+	}
+
+	userID, err := bson.ObjectIDFromHex(userIDString)
+	if err != nil {
+		return nil, "", "", ErrRefreshTokenInvalid
+	}
+
+	currentUser, err := s.users.FindByID(ctx, userID)
+	if err != nil {
+		if errors.Is(err, user.ErrUserNotFound) {
+			return nil, "", "", ErrRefreshTokenInvalid
+		}
+
+		return nil, "", "", err
+	}
+
+	if !currentUser.IsActive() {
+		return nil, "", "", ErrRefreshTokenInvalid
+	}
+
+	accessToken, err := s.jwt.GenerateAccessToken(currentUser)
+	if err != nil {
+		return nil, "", "", err
+	}
+
+	newRefreshToken, err := s.sessions.Rotate(
+		ctx,
+		input.RefreshToken,
+		currentUser,
+	)
+	if err != nil {
+		return nil, "", "", err
+	}
+
+	return currentUser, accessToken, newRefreshToken, nil
+}
+
+func (s *Service) Logout(
+	ctx context.Context,
+	refreshToken string,
+) error {
+	return s.sessions.Revoke(
+		ctx,
+		refreshToken,
+	)
 }
 
 func (s *Service) GetUserByID(
