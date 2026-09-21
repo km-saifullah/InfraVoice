@@ -353,15 +353,6 @@ func handleInfrastructureError(
 
 	case errors.Is(
 		err,
-		infrastructure.ErrInvalidProject,
-	):
-		response.BadRequest(
-			c,
-			err.Error(),
-		)
-
-	case errors.Is(
-		err,
 		infrastructure.ErrSpecificationNotFound,
 	):
 		response.NotFound(
@@ -376,6 +367,15 @@ func handleInfrastructureError(
 		response.NotFound(
 			c,
 			"project not found",
+		)
+
+	case errors.Is(
+		err,
+		infrastructure.ErrInvalidProject,
+	):
+		response.BadRequest(
+			c,
+			err.Error(),
 		)
 
 	case errors.Is(

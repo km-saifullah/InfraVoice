@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/km-saifullah/infra-voice/backend/internal/auth"
+	"github.com/km-saifullah/infra-voice/backend/internal/command"
 	"github.com/km-saifullah/infra-voice/backend/internal/config"
 	"github.com/km-saifullah/infra-voice/backend/internal/database/mongodb"
 	redisdb "github.com/km-saifullah/infra-voice/backend/internal/database/redis"
@@ -81,21 +82,31 @@ func Setup(
 		projectService,
 	)
 
-	infrastructureRepository :=
-		infrastructure.NewRepository(
-			mongoDatabase,
-		)
+	infrastructureRepository := infrastructure.NewRepository(
+		mongoDatabase,
+	)
 
-	infrastructureService :=
-		infrastructure.NewService(
-			infrastructureRepository,
-			projectService,
-		)
+	infrastructureService := infrastructure.NewService(
+		infrastructureRepository,
+		projectService,
+	)
 
-	infrastructureHandler :=
-		handler.NewInfrastructureHandler(
-			infrastructureService,
-		)
+	infrastructureHandler := handler.NewInfrastructureHandler(
+		infrastructureService,
+	)
+
+	commandRepository := command.NewRepository(
+		mongoDatabase,
+	)
+
+	commandService := command.NewService(
+		commandRepository,
+		projectService,
+	)
+
+	commandHandler := handler.NewCommandHandler(
+		commandService,
+	)
 
 	api := router.Group("/api/v1")
 
@@ -122,6 +133,7 @@ func Setup(
 	)
 
 	authenticatedRoutes := api.Group("")
+
 	authenticatedRoutes.Use(
 		middleware.Auth(jwtService),
 	)
@@ -192,5 +204,24 @@ func Setup(
 	infrastructureRoutes.POST(
 		"/:spec_id/validate",
 		infrastructureHandler.Validate,
+	)
+
+	commandRoutes := projectRoutes.Group(
+		"/:id/commands",
+	)
+
+	commandRoutes.POST(
+		"",
+		commandHandler.Create,
+	)
+
+	commandRoutes.GET(
+		"",
+		commandHandler.List,
+	)
+
+	authenticatedRoutes.GET(
+		"/commands/:command_id",
+		commandHandler.Get,
 	)
 }
