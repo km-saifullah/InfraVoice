@@ -7,7 +7,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/v2/bson"
 
-	"github.com/km-saifullah/infra-voice/backend/internal/http/middleware"
 	"github.com/km-saifullah/infra-voice/backend/internal/http/response"
 	"github.com/km-saifullah/infra-voice/backend/internal/infrastructure"
 	"github.com/km-saifullah/infra-voice/backend/internal/project"
@@ -345,6 +344,24 @@ func handleInfrastructureError(
 
 	case errors.Is(
 		err,
+		infrastructure.ErrInvalidInput,
+	):
+		response.BadRequest(
+			c,
+			err.Error(),
+		)
+
+	case errors.Is(
+		err,
+		infrastructure.ErrInvalidProject,
+	):
+		response.BadRequest(
+			c,
+			err.Error(),
+		)
+
+	case errors.Is(
+		err,
 		infrastructure.ErrSpecificationNotFound,
 	):
 		response.NotFound(
@@ -363,15 +380,6 @@ func handleInfrastructureError(
 
 	case errors.Is(
 		err,
-		infrastructure.ErrInvalidProject,
-	):
-		response.BadRequest(
-			c,
-			err.Error(),
-		)
-
-	case errors.Is(
-		err,
 		project.ErrInvalidInput,
 	):
 		response.BadRequest(
@@ -385,32 +393,4 @@ func handleInfrastructureError(
 			"failed to process infrastructure specification",
 		)
 	}
-}
-
-func authenticatedInfrastructureUserID(
-	c *gin.Context,
-) (bson.ObjectID, bool) {
-	userIDString, exists := middleware.UserID(c)
-
-	if !exists {
-		response.Unauthorized(
-			c,
-			"authenticated user not found",
-		)
-		return bson.NilObjectID, false
-	}
-
-	userID, err := bson.ObjectIDFromHex(
-		userIDString,
-	)
-
-	if err != nil {
-		response.Unauthorized(
-			c,
-			"invalid authenticated user",
-		)
-		return bson.NilObjectID, false
-	}
-
-	return userID, true
 }
