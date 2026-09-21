@@ -52,7 +52,9 @@ func Setup(
 		healthHandler.Health,
 	)
 
-	jwtService := auth.NewJWTService(cfg.JWT)
+	jwtService := auth.NewJWTService(
+		cfg.JWT,
+	)
 
 	sessionStore := auth.NewSessionStore(
 		redisClient.Client(),
@@ -124,9 +126,13 @@ func Setup(
 		projectService,
 	)
 
-	api := router.Group("/api/v1")
+	api := router.Group(
+		"/api/v1",
+	)
 
-	authRoutes := api.Group("/auth")
+	authRoutes := api.Group(
+		"/auth",
+	)
 
 	authRoutes.POST(
 		"/register",
@@ -268,7 +274,9 @@ func newAIService(
 			nil,
 		)
 
-		return ai.NewService(provider)
+		return ai.NewService(
+			provider,
+		)
 
 	default:
 		logger.Error(
@@ -277,7 +285,9 @@ func newAIService(
 			cfg.AI.Provider,
 		)
 
-		return ai.NewService(nil)
+		return ai.NewService(
+			nil,
+		)
 	}
 
 }
