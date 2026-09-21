@@ -9,6 +9,7 @@ import (
 	"github.com/km-saifullah/infra-voice/backend/internal/ai"
 	"github.com/km-saifullah/infra-voice/backend/internal/ai/ollama"
 	"github.com/km-saifullah/infra-voice/backend/internal/auth"
+	"github.com/km-saifullah/infra-voice/backend/internal/command"
 	"github.com/km-saifullah/infra-voice/backend/internal/config"
 	"github.com/km-saifullah/infra-voice/backend/internal/database/mongodb"
 	redisdb "github.com/km-saifullah/infra-voice/backend/internal/database/redis"
@@ -82,6 +83,19 @@ func Setup(
 
 	projectHandler := handler.NewProjectHandler(
 		projectService,
+	)
+
+	commandRepository := command.NewRepository(
+		mongoDatabase,
+	)
+
+	commandService := command.NewService(
+		commandRepository,
+		projectService,
+	)
+
+	commandHandler := handler.NewCommandHandler(
+		commandService,
 	)
 
 	infrastructureRepository :=
@@ -174,6 +188,29 @@ func Setup(
 		projectHandler.Delete,
 	)
 
+	commandRoutes := projectRoutes.Group(
+		"/:id/commands",
+	)
+
+	commandRoutes.POST(
+		"",
+		commandHandler.Create,
+	)
+
+	commandRoutes.GET(
+		"",
+		commandHandler.List,
+	)
+
+	commandByIDRoutes := authenticatedRoutes.Group(
+		"/commands",
+	)
+
+	commandByIDRoutes.GET(
+		"/:command_id",
+		commandHandler.Get,
+	)
+
 	infrastructureRoutes := projectRoutes.Group(
 		"/:id/infrastructure",
 	)
@@ -212,6 +249,7 @@ func Setup(
 		"/:spec_id/validate",
 		infrastructureHandler.Validate,
 	)
+
 }
 
 func newAIService(
@@ -241,4 +279,5 @@ func newAIService(
 
 		return ai.NewService(nil)
 	}
+
 }
