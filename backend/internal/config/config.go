@@ -49,9 +49,9 @@ type JWTConfig struct {
 }
 
 type AIConfig struct {
-	Provider string
-	APIKey   string
-	Model    string
+	Provider  string
+	OllamaURL string
+	Model     string
 }
 
 type TerraformConfig struct {
@@ -63,45 +63,108 @@ type TerraformConfig struct {
 func Load() (Config, error) {
 	cfg := Config{
 		App: AppConfig{
-			Name: getEnv("APP_NAME", "infra-voice-api"),
-			Env:  getEnv("APP_ENV", "development"),
+			Name: getEnv(
+				"APP_NAME",
+				"infra-voice-api",
+			),
+			Env: getEnv(
+				"APP_ENV",
+				"development",
+			),
 		},
 
 		Server: ServerConfig{
-			Host:            getEnv("SERVER_HOST", "0.0.0.0"),
-			Port:            getEnvInt("SERVER_PORT", 8000),
-			ReadTimeoutSec:  getEnvInt("SERVER_READ_TIMEOUT_SEC", 15),
-			WriteTimeoutSec: getEnvInt("SERVER_WRITE_TIMEOUT_SEC", 15),
-			IdleTimeoutSec:  getEnvInt("SERVER_IDLE_TIMEOUT_SEC", 60),
+			Host: getEnv(
+				"SERVER_HOST",
+				"0.0.0.0",
+			),
+			Port: getEnvInt(
+				"SERVER_PORT",
+				8000,
+			),
+			ReadTimeoutSec: getEnvInt(
+				"SERVER_READ_TIMEOUT_SEC",
+				15,
+			),
+			WriteTimeoutSec: getEnvInt(
+				"SERVER_WRITE_TIMEOUT_SEC",
+				15,
+			),
+			IdleTimeoutSec: getEnvInt(
+				"SERVER_IDLE_TIMEOUT_SEC",
+				60,
+			),
 		},
 
 		MongoDB: MongoDBConfig{
-			URI:      getEnv("MONGODB_URI", ""),
-			Database: getEnv("MONGODB_DATABASE", "infra_voice"),
+			URI: getEnv(
+				"MONGODB_URI",
+				"",
+			),
+			Database: getEnv(
+				"MONGODB_DATABASE",
+				"infra_voice",
+			),
 		},
 
 		Redis: RedisConfig{
-			URL:      getEnv("REDIS_URL", "redis://localhost:6379"),
-			Password: getEnv("REDIS_PASSWORD", ""),
-			DB:       getEnvInt("REDIS_DB", 0),
+			URL: getEnv(
+				"REDIS_URL",
+				"redis://localhost:6379",
+			),
+			Password: getEnv(
+				"REDIS_PASSWORD",
+				"",
+			),
+			DB: getEnvInt(
+				"REDIS_DB",
+				0,
+			),
 		},
 
 		JWT: JWTConfig{
-			Secret:             getEnv("JWT_SECRET", ""),
-			AccessTokenMinutes: getEnvInt("JWT_ACCESS_TOKEN_MINUTES", 15),
-			RefreshTokenDays:   getEnvInt("JWT_REFRESH_TOKEN_DAYS", 30),
+			Secret: getEnv(
+				"JWT_SECRET",
+				"",
+			),
+			AccessTokenMinutes: getEnvInt(
+				"JWT_ACCESS_TOKEN_MINUTES",
+				15,
+			),
+			RefreshTokenDays: getEnvInt(
+				"JWT_REFRESH_TOKEN_DAYS",
+				30,
+			),
 		},
 
 		AI: AIConfig{
-			Provider: getEnv("AI_PROVIDER", "openai"),
-			APIKey:   getEnv("AI_API_KEY", ""),
-			Model:    getEnv("AI_MODEL", ""),
+			Provider: getEnv(
+				"AI_PROVIDER",
+				"ollama",
+			),
+			OllamaURL: getEnv(
+				"AI_OLLAMA_URL",
+				"http://localhost:11434",
+			),
+			Model: getEnv(
+				"AI_MODEL",
+				"qwen2.5:7b",
+			),
 		},
 
 		Terraform: TerraformConfig{
-			BinaryPath:          getEnv("TERRAFORM_BINARY_PATH", "terraform"),
-			WorkspaceRoot:       getEnv("TERRAFORM_WORKSPACE_ROOT", "./terraform/workspaces"),
-			ExecutionTimeoutSec: getEnvInt("TERRAFORM_EXECUTION_TIMEOUT_SEC", 300),
+			BinaryPath: getEnv(
+				"TERRAFORM_BINARY_PATH",
+				"terraform",
+			),
+			WorkspaceRoot: getEnv(
+				"TERRAFORM_WORKSPACE_ROOT",
+				"./terraform/workspaces",
+			),
+			ExecutionTimeoutSec: getEnvInt(
+				"TERRAFORM_EXECUTION_TIMEOUT_SEC",
+				300,
+			),
 		},
 	}
 
@@ -116,14 +179,21 @@ func (c Config) Validate() error {
 	var validationErrors []string
 
 	if strings.TrimSpace(c.App.Name) == "" {
-		validationErrors = append(validationErrors, "APP_NAME cannot be empty")
+		validationErrors = append(
+			validationErrors,
+			"APP_NAME cannot be empty",
+		)
 	}
 
 	if strings.TrimSpace(c.App.Env) == "" {
-		validationErrors = append(validationErrors, "APP_ENV cannot be empty")
+		validationErrors = append(
+			validationErrors,
+			"APP_ENV cannot be empty",
+		)
 	}
 
-	if c.Server.Port < 1 || c.Server.Port > 65535 {
+	if c.Server.Port < 1 ||
+		c.Server.Port > 65535 {
 		validationErrors = append(
 			validationErrors,
 			"SERVER_PORT must be between 1 and 65535",
@@ -200,6 +270,34 @@ func (c Config) Validate() error {
 		)
 	}
 
+	if strings.TrimSpace(c.AI.Provider) == "" {
+		validationErrors = append(
+			validationErrors,
+			"AI_PROVIDER cannot be empty",
+		)
+	}
+
+	if strings.TrimSpace(c.AI.Model) == "" {
+		validationErrors = append(
+			validationErrors,
+			"AI_MODEL cannot be empty",
+		)
+	}
+
+	if strings.EqualFold(
+		c.AI.Provider,
+		"ollama",
+	) &&
+		strings.TrimSpace(
+			c.AI.OllamaURL,
+		) == "" {
+
+		validationErrors = append(
+			validationErrors,
+			"AI_OLLAMA_URL cannot be empty when AI_PROVIDER is ollama",
+		)
+	}
+
 	if c.Terraform.ExecutionTimeoutSec <= 0 {
 		validationErrors = append(
 			validationErrors,
@@ -208,13 +306,21 @@ func (c Config) Validate() error {
 	}
 
 	if len(validationErrors) > 0 {
-		return errors.New(strings.Join(validationErrors, "; "))
+		return errors.New(
+			strings.Join(
+				validationErrors,
+				"; ",
+			),
+		)
 	}
 
 	return nil
 }
 
-func getEnv(key string, fallback string) string {
+func getEnv(
+	key string,
+	fallback string,
+) string {
 	value, exists := os.LookupEnv(key)
 
 	if !exists {
@@ -230,14 +336,21 @@ func getEnv(key string, fallback string) string {
 	return value
 }
 
-func getEnvInt(key string, fallback int) int {
+func getEnvInt(
+	key string,
+	fallback int,
+) int {
 	value, exists := os.LookupEnv(key)
 
-	if !exists || strings.TrimSpace(value) == "" {
+	if !exists ||
+		strings.TrimSpace(value) == "" {
 		return fallback
 	}
 
-	parsed, err := strconv.Atoi(strings.TrimSpace(value))
+	parsed, err := strconv.Atoi(
+		strings.TrimSpace(value),
+	)
+
 	if err != nil {
 		return fallback
 	}
@@ -246,5 +359,9 @@ func getEnvInt(key string, fallback int) int {
 }
 
 func (c Config) Address() string {
-	return fmt.Sprintf("%s:%d", c.Server.Host, c.Server.Port)
+	return fmt.Sprintf(
+		"%s:%d",
+		c.Server.Host,
+		c.Server.Port,
+	)
 }

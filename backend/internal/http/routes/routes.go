@@ -2,11 +2,13 @@ package routes
 
 import (
 	"log/slog"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/km-saifullah/infra-voice/backend/internal/ai"
+	"github.com/km-saifullah/infra-voice/backend/internal/ai/ollama"
 	"github.com/km-saifullah/infra-voice/backend/internal/auth"
-	"github.com/km-saifullah/infra-voice/backend/internal/command"
 	"github.com/km-saifullah/infra-voice/backend/internal/config"
 	"github.com/km-saifullah/infra-voice/backend/internal/database/mongodb"
 	redisdb "github.com/km-saifullah/infra-voice/backend/internal/database/redis"
@@ -82,30 +84,30 @@ func Setup(
 		projectService,
 	)
 
-	infrastructureRepository := infrastructure.NewRepository(
-		mongoDatabase,
+	infrastructureRepository :=
+		infrastructure.NewRepository(
+			mongoDatabase,
+		)
+
+	infrastructureService :=
+		infrastructure.NewService(
+			infrastructureRepository,
+			projectService,
+		)
+
+	infrastructureHandler :=
+		handler.NewInfrastructureHandler(
+			infrastructureService,
+		)
+
+	aiService := newAIService(
+		cfg,
+		logger,
 	)
 
-	infrastructureService := infrastructure.NewService(
-		infrastructureRepository,
+	aiHandler := handler.NewAIHandler(
+		aiService,
 		projectService,
-	)
-
-	infrastructureHandler := handler.NewInfrastructureHandler(
-		infrastructureService,
-	)
-
-	commandRepository := command.NewRepository(
-		mongoDatabase,
-	)
-
-	commandService := command.NewService(
-		commandRepository,
-		projectService,
-	)
-
-	commandHandler := handler.NewCommandHandler(
-		commandService,
 	)
 
 	api := router.Group("/api/v1")
@@ -177,6 +179,11 @@ func Setup(
 	)
 
 	infrastructureRoutes.POST(
+		"/parse",
+		aiHandler.ParseInfrastructure,
+	)
+
+	infrastructureRoutes.POST(
 		"",
 		infrastructureHandler.Create,
 	)
@@ -205,23 +212,33 @@ func Setup(
 		"/:spec_id/validate",
 		infrastructureHandler.Validate,
 	)
+}
 
-	commandRoutes := projectRoutes.Group(
-		"/:id/commands",
-	)
+func newAIService(
+	cfg config.Config,
+	logger *slog.Logger,
+) *ai.Service {
+	switch strings.ToLower(
+		strings.TrimSpace(
+			cfg.AI.Provider,
+		),
+	) {
+	case "ollama":
+		provider := ollama.NewProvider(
+			cfg.AI.OllamaURL,
+			cfg.AI.Model,
+			nil,
+		)
 
-	commandRoutes.POST(
-		"",
-		commandHandler.Create,
-	)
+		return ai.NewService(provider)
 
-	commandRoutes.GET(
-		"",
-		commandHandler.List,
-	)
+	default:
+		logger.Error(
+			"unsupported AI provider configured",
+			"provider",
+			cfg.AI.Provider,
+		)
 
-	authenticatedRoutes.GET(
-		"/commands/:command_id",
-		commandHandler.Get,
-	)
+		return ai.NewService(nil)
+	}
 }

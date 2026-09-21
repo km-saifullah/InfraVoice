@@ -39,16 +39,15 @@ func (s *Service) ParseInfrastructure(
 		ctx,
 		request,
 	)
-
 	if err != nil {
 		return ParseResult{}, err
 	}
 
-	if result.NeedsClarification {
-		result.Clarification = strings.TrimSpace(
-			result.Clarification,
-		)
+	result.Clarification = strings.TrimSpace(
+		result.Clarification,
+	)
 
+	if result.NeedsClarification {
 		if result.Clarification == "" {
 			return ParseResult{}, fmt.Errorf(
 				"%w: provider did not specify what information is required",
@@ -62,7 +61,10 @@ func (s *Service) ParseInfrastructure(
 	}
 
 	if result.Specification == nil {
-		return ParseResult{}, ErrInvalidProviderResponse
+		return ParseResult{}, fmt.Errorf(
+			"%w: provider returned no infrastructure specification",
+			ErrInvalidProviderResponse,
+		)
 	}
 
 	result.Specification.Normalize()

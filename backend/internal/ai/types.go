@@ -11,9 +11,9 @@ type ParseRequest struct {
 }
 
 type ParseResult struct {
-	Specification      *infrastructure.InfrastructureSpec
-	NeedsClarification bool
-	Clarification      string
+	Specification      *infrastructure.InfrastructureSpec `json:"specification,omitempty"`
+	NeedsClarification bool                               `json:"needs_clarification"`
+	Clarification      string                             `json:"clarification,omitempty"`
 }
 
 type Provider interface {

@@ -3,59 +3,13 @@ package ai
 import (
 	"context"
 	"errors"
-	"strings"
 	"testing"
 
 	"github.com/km-saifullah/infra-voice/backend/internal/infrastructure"
 )
 
-func TestServiceParseInfrastructure(t *testing.T) {
-	provider := NewMockProvider(
-		NewMockVPCResult(),
-	)
-
-	service := NewService(provider)
-
-	result, err := service.ParseInfrastructure(
-		context.Background(),
-		ParseRequest{
-			Command: "Create a VPC with a public subnet.",
-		},
-	)
-
-	if err != nil {
-		t.Fatalf(
-			"expected successful parsing, got: %v",
-			err,
-		)
-	}
-
-	if result.Specification == nil {
-		t.Fatal("expected infrastructure specification")
-	}
-
-	if result.Specification.Provider !=
-		infrastructure.ProviderAWS {
-		t.Fatalf(
-			"expected AWS provider, got: %s",
-			result.Specification.Provider,
-		)
-	}
-
-	if len(result.Specification.VPCs) != 1 {
-		t.Fatalf(
-			"expected one VPC, got: %d",
-			len(result.Specification.VPCs),
-		)
-	}
-}
-
 func TestServiceRejectsEmptyCommand(t *testing.T) {
-	service := NewService(
-		NewMockProvider(
-			NewMockVPCResult(),
-		),
-	)
+	service := NewService(&MockProvider{})
 
 	_, err := service.ParseInfrastructure(
 		context.Background(),
@@ -64,78 +18,104 @@ func TestServiceRejectsEmptyCommand(t *testing.T) {
 		},
 	)
 
-	if err == nil {
-		t.Fatal("expected error")
-	}
-
 	if !errors.Is(err, ErrInvalidInput) {
 		t.Fatalf(
-			"expected ErrInvalidInput, got: %v",
+			"expected ErrInvalidInput, got %v",
 			err,
 		)
 	}
 }
 
-func TestServiceRejectsInvalidProviderOutput(t *testing.T) {
-	provider := NewMockProvider(
-		ParseResult{
-			Specification: &infrastructure.InfrastructureSpec{
-				Provider: infrastructure.ProviderAWS,
-				Version:  1,
-			},
-		},
-	)
-
-	service := NewService(provider)
+func TestServiceRequiresProvider(t *testing.T) {
+	service := NewService(nil)
 
 	_, err := service.ParseInfrastructure(
 		context.Background(),
 		ParseRequest{
-			Command: "Create infrastructure.",
+			Command: "create an encrypted S3 bucket",
 		},
 	)
 
-	if err == nil {
-		t.Fatal("expected provider output validation error")
-	}
-
-	if !errors.Is(
-		err,
-		ErrInvalidProviderResponse,
-	) {
+	if !errors.Is(err, ErrProviderNotConfigured) {
 		t.Fatalf(
-			"expected ErrInvalidProviderResponse, got: %v",
+			"expected ErrProviderNotConfigured, got %v",
 			err,
 		)
 	}
 }
 
-func TestServiceSupportsClarification(t *testing.T) {
-	provider := NewMockProvider(
-		ParseResult{
-			NeedsClarification: true,
-			Clarification:      "Which AWS region should be used?",
+func TestServiceAcceptsValidSpecification(t *testing.T) {
+	provider := &MockProvider{
+		ParseResult: ParseResult{
+			Specification: &infrastructure.InfrastructureSpec{
+				Provider: "AWS",
+				Version:  1,
+				S3: []infrastructure.S3Spec{
+					{
+						Name:       "logs",
+						BucketName: "infra-voice-logs",
+						Encryption: true,
+					},
+				},
+			},
 		},
-	)
+	}
 
 	service := NewService(provider)
 
 	result, err := service.ParseInfrastructure(
 		context.Background(),
 		ParseRequest{
-			Command: "Create a VPC.",
+			Command: "create an encrypted S3 bucket named infra-voice-logs",
 		},
 	)
 
 	if err != nil {
 		t.Fatalf(
-			"expected clarification result, got: %v",
+			"expected no error, got %v",
+			err,
+		)
+	}
+
+	if result.Specification == nil {
+		t.Fatal("expected infrastructure specification")
+	}
+
+	if result.Specification.Provider != infrastructure.ProviderAWS {
+		t.Fatalf(
+			"expected provider %q, got %q",
+			infrastructure.ProviderAWS,
+			result.Specification.Provider,
+		)
+	}
+}
+
+func TestServiceReturnsClarification(t *testing.T) {
+	provider := &MockProvider{
+		ParseResult: ParseResult{
+			NeedsClarification: true,
+			Clarification:      "Which AWS resource should be created?",
+		},
+	}
+
+	service := NewService(provider)
+
+	result, err := service.ParseInfrastructure(
+		context.Background(),
+		ParseRequest{
+			Command: "create something in AWS",
+		},
+	)
+
+	if err != nil {
+		t.Fatalf(
+			"expected no error, got %v",
 			err,
 		)
 	}
 
 	if !result.NeedsClarification {
-		t.Fatal("expected clarification to be required")
+		t.Fatal("expected clarification response")
 	}
 
 	if result.Specification != nil {
@@ -143,14 +123,37 @@ func TestServiceSupportsClarification(t *testing.T) {
 			"expected specification to be nil when clarification is required",
 		)
 	}
+}
 
-	if !strings.Contains(
-		result.Clarification,
-		"region",
-	) {
+func TestServiceRejectsInvalidProviderSpecification(t *testing.T) {
+	provider := &MockProvider{
+		ParseResult: ParseResult{
+			Specification: &infrastructure.InfrastructureSpec{
+				Provider: "aws",
+				Version:  1,
+				S3: []infrastructure.S3Spec{
+					{
+						Name:       "logs",
+						Encryption: false,
+					},
+				},
+			},
+		},
+	}
+
+	service := NewService(provider)
+
+	_, err := service.ParseInfrastructure(
+		context.Background(),
+		ParseRequest{
+			Command: "create an S3 bucket",
+		},
+	)
+
+	if !errors.Is(err, ErrInvalidProviderResponse) {
 		t.Fatalf(
-			"expected region clarification, got: %s",
-			result.Clarification,
+			"expected ErrInvalidProviderResponse, got %v",
+			err,
 		)
 	}
 }
