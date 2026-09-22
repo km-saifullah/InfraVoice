@@ -17,6 +17,7 @@ import (
 	"github.com/km-saifullah/infra-voice/backend/internal/http/middleware"
 	"github.com/km-saifullah/infra-voice/backend/internal/infrastructure"
 	"github.com/km-saifullah/infra-voice/backend/internal/project"
+	"github.com/km-saifullah/infra-voice/backend/internal/terraform"
 	"github.com/km-saifullah/infra-voice/backend/internal/user"
 )
 
@@ -124,6 +125,17 @@ func Setup(
 	aiHandler := handler.NewAIHandler(
 		aiService,
 		projectService,
+	)
+
+	terraformGenerator := terraform.NewGenerator()
+
+	terraformService := terraform.NewService(
+		terraformGenerator,
+		infrastructureService,
+	)
+
+	terraformHandler := handler.NewTerraformHandler(
+		terraformService,
 	)
 
 	api := router.Group(
@@ -256,6 +268,14 @@ func Setup(
 		infrastructureHandler.Validate,
 	)
 
+	terraformRoutes := projectRoutes.Group(
+		"/:id/terraform",
+	)
+
+	terraformRoutes.POST(
+		"/generate",
+		terraformHandler.Generate,
+	)
 }
 
 func newAIService(
@@ -289,5 +309,4 @@ func newAIService(
 			nil,
 		)
 	}
-
 }
