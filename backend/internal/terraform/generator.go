@@ -40,21 +40,6 @@ func (g *Generator) Generate(
 ) (Files, error) {
 	spec.Normalize()
 
-	if err := infrastructure.Validate(&spec); err != nil {
-		return nil, err
-	}
-
-	if err := infrastructure.ValidatePolicy(&spec); err != nil {
-		return nil, err
-	}
-
-	if !spec.HasResources() {
-		return nil, fmt.Errorf(
-			"%w: infrastructure specification contains no resources",
-			ErrInvalidInput,
-		)
-	}
-
 	if spec.Provider != infrastructure.ProviderAWS {
 		return nil, fmt.Errorf(
 			"%w: %s",
@@ -68,6 +53,21 @@ func (g *Generator) Generate(
 	if region == "" {
 		return nil, fmt.Errorf(
 			"%w: AWS region is required",
+			ErrInvalidInput,
+		)
+	}
+
+	if err := infrastructure.Validate(&spec); err != nil {
+		return nil, err
+	}
+
+	if err := infrastructure.ValidatePolicy(&spec); err != nil {
+		return nil, err
+	}
+
+	if !spec.HasResources() {
+		return nil, fmt.Errorf(
+			"%w: infrastructure specification contains no resources",
 			ErrInvalidInput,
 		)
 	}
@@ -367,8 +367,8 @@ func generateVPC(
 			builder.WriteString(
 				fmt.Sprintf(
 					`resource "aws_subnet" "%s" {
-  vpc_id            = aws_vpc.%s.id
-  cidr_block        = %q
+  vpc_id     = aws_vpc.%s.id
+  cidr_block = %q
 `,
 					subnetResourceName,
 					vpcResourceName,
@@ -406,6 +406,83 @@ func generateVPC(
 			)
 		}
 
+		hasPublicSubnet := false
+
+		for _, subnet := range vpc.Subnets {
+			if subnet.Type == "public" {
+				hasPublicSubnet = true
+				break
+			}
+		}
+
+		if !hasPublicSubnet {
+			continue
+		}
+
+		igwName := terraformResourceName(
+			fmt.Sprintf(
+				"%s_igw",
+				vpc.Name,
+			),
+			vpcIndex,
+		)
+
+		builder.WriteString("\n")
+
+		builder.WriteString(
+			fmt.Sprintf(
+				`resource "aws_internet_gateway" "%s" {
+  vpc_id = aws_vpc.%s.id
+
+  tags = {
+    Name = %q
+  }
+}
+`,
+				igwName,
+				vpcResourceName,
+				fmt.Sprintf(
+					"%s-igw",
+					vpc.Name,
+				),
+			),
+		)
+
+		routeTableName := terraformResourceName(
+			fmt.Sprintf(
+				"%s_public",
+				vpc.Name,
+			),
+			vpcIndex,
+		)
+
+		builder.WriteString("\n")
+
+		builder.WriteString(
+			fmt.Sprintf(
+				`resource "aws_route_table" "%s" {
+  vpc_id = aws_vpc.%s.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.%s.id
+  }
+
+  tags = {
+    Name = %q
+  }
+}
+`,
+				routeTableName,
+				vpcResourceName,
+				igwName,
+				fmt.Sprintf(
+					"%s-public",
+					vpc.Name,
+				),
+			),
+		)
+
 		for subnetIndex, subnet := range vpc.Subnets {
 			if subnet.Type != "public" {
 				continue
@@ -420,69 +497,13 @@ func generateVPC(
 				subnetIndex,
 			)
 
-			routeTableName := terraformResourceName(
+			associationName := terraformResourceName(
 				fmt.Sprintf(
-					"%s_%s_public",
+					"%s_%s_association",
 					vpc.Name,
 					subnet.Name,
 				),
 				subnetIndex,
-			)
-
-			igwName := terraformResourceName(
-				fmt.Sprintf(
-					"%s_igw",
-					vpc.Name,
-				),
-				vpcIndex,
-			)
-
-			builder.WriteString("\n")
-
-			builder.WriteString(
-				fmt.Sprintf(
-					`resource "aws_internet_gateway" "%s" {
-  vpc_id = aws_vpc.%s.id
-
-  tags = {
-    Name = %q
-  }
-}
-`,
-					igwName,
-					vpcResourceName,
-					fmt.Sprintf(
-						"%s-igw",
-						vpc.Name,
-					),
-				),
-			)
-
-			builder.WriteString("\n")
-
-			builder.WriteString(
-				fmt.Sprintf(
-					`resource "aws_route_table" "%s" {
-  vpc_id = aws_vpc.%s.id
-
-  route {
-    cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.%s.id
-  }
-
-  tags = {
-    Name = %q
-  }
-}
-`,
-					routeTableName,
-					vpcResourceName,
-					igwName,
-					fmt.Sprintf(
-						"%s-public",
-						subnet.Name,
-					),
-				),
 			)
 
 			builder.WriteString("\n")
@@ -494,14 +515,7 @@ func generateVPC(
   route_table_id = aws_route_table.%s.id
 }
 `,
-					terraformResourceName(
-						fmt.Sprintf(
-							"%s_%s_association",
-							vpc.Name,
-							subnet.Name,
-						),
-						subnetIndex,
-					),
+					associationName,
 					subnetResourceName,
 					routeTableName,
 				),
@@ -568,11 +582,12 @@ func generateS3(
 			)
 		}
 
-		builder.WriteString("\n")
+		if bucket.Encryption {
+			builder.WriteString("\n")
 
-		builder.WriteString(
-			fmt.Sprintf(
-				`resource "aws_s3_bucket_server_side_encryption_configuration" "%s" {
+			builder.WriteString(
+				fmt.Sprintf(
+					`resource "aws_s3_bucket_server_side_encryption_configuration" "%s" {
   bucket = aws_s3_bucket.%s.id
 
   rule {
@@ -582,10 +597,11 @@ func generateS3(
   }
 }
 `,
-				resourceName,
-				resourceName,
-			),
-		)
+					resourceName,
+					resourceName,
+				),
+			)
+		}
 	}
 
 	return builder.String()
@@ -614,9 +630,9 @@ func generateEC2(
 				`resource "aws_instance" "%s" {
   count = %d
 
-  ami           = var.%s_ami
+  ami = var.%s_ami
   instance_type = %q
-  subnet_id     = aws_subnet.%s.id
+  subnet_id = aws_subnet.%s.id
 
   associate_public_ip_address = %t
 
