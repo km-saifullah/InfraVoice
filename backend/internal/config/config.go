@@ -88,7 +88,7 @@ func Load() (Config, error) {
 			),
 			WriteTimeoutSec: getEnvInt(
 				"SERVER_WRITE_TIMEOUT_SEC",
-				15,
+				120,
 			),
 			IdleTimeoutSec: getEnvInt(
 				"SERVER_IDLE_TIMEOUT_SEC",

@@ -280,3 +280,196 @@ func TestProviderRejectsInvalidModelJSON(
 		)
 	}
 }
+
+func TestProviderRepairsMissingRequestedResource(t *testing.T) {
+	requestCount := 0
+
+	server := httptest.NewServer(
+		http.HandlerFunc(
+			func(w http.ResponseWriter, r *http.Request) {
+				requestCount++
+
+				var request generateRequest
+
+				if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+					t.Fatalf("failed to decode request: %v", err)
+				}
+
+				if requestCount == 1 {
+					if !strings.Contains(
+						request.Prompt,
+						"Never silently omit a requested resource type",
+					) {
+						t.Fatal(
+							"expected resource preservation rule in initial prompt",
+						)
+					}
+
+					response := generateResponse{
+						Response: `{"needs_clarification":false,"specification":{"provider":"aws","version":1,"vpcs":[{"name":"main-vpc","cidr":"10.0.0.0/16","subnets":[{"name":"public-subnet","cidr":"10.0.1.0/24","type":"public","availability_zone":"ap-south-1a"}]}]}}`,
+					}
+
+					w.Header().Set(
+						"Content-Type",
+						"application/json",
+					)
+
+					_ = json.NewEncoder(
+						w,
+					).Encode(response)
+
+					return
+				}
+
+				if !strings.Contains(
+					request.Prompt,
+					"Missing requested resource types:\ns3",
+				) {
+					t.Fatalf(
+						"expected repair prompt to identify missing S3, got %q",
+						request.Prompt,
+					)
+				}
+
+				response := generateResponse{
+					Response: `{"needs_clarification":false,"specification":{"provider":"aws","version":1,"vpcs":[{"name":"main-vpc","cidr":"10.0.0.0/16","subnets":[{"name":"public-subnet","cidr":"10.0.1.0/24","type":"public","availability_zone":"ap-south-1a"}]}],"s3":[{"name":"infravoice-demo-bucket","bucket_name":"infravoice-demo-bucket","versioning":true,"encryption":true}]}}`,
+				}
+
+				w.Header().Set(
+					"Content-Type",
+					"application/json",
+				)
+
+				_ = json.NewEncoder(
+					w,
+				).Encode(response)
+			},
+		),
+	)
+
+	defer server.Close()
+
+	provider := NewProvider(
+		server.URL,
+		"qwen2.5:7b",
+		server.Client(),
+	)
+
+	result, err := provider.ParseInfrastructure(
+		context.Background(),
+		ai.ParseRequest{
+			Command: "Create an AWS VPC named main-vpc with CIDR 10.0.0.0/16 and one public subnet named public-subnet with CIDR 10.0.1.0/24 in ap-south-1a. Also create an S3 bucket named infravoice-demo-bucket with versioning and encryption enabled.",
+		},
+	)
+
+	if err != nil {
+		t.Fatalf(
+			"expected no error, got %v",
+			err,
+		)
+	}
+
+	if requestCount != 2 {
+		t.Fatalf(
+			"expected one repair request, got %d provider requests",
+			requestCount,
+		)
+	}
+
+	if result.Specification == nil {
+		t.Fatal("expected specification")
+	}
+
+	if len(result.Specification.VPCs) != 1 {
+		t.Fatalf(
+			"expected one VPC, got %d",
+			len(result.Specification.VPCs),
+		)
+	}
+
+	if len(result.Specification.S3) != 1 {
+		t.Fatalf(
+			"expected one S3 resource, got %d",
+			len(result.Specification.S3),
+		)
+	}
+
+	bucket := result.Specification.S3[0]
+
+	if bucket.BucketName != "infravoice-demo-bucket" {
+		t.Fatalf(
+			"unexpected bucket name: %q",
+			bucket.BucketName,
+		)
+	}
+
+	if !bucket.Versioning {
+		t.Fatal(
+			"expected S3 versioning to be enabled",
+		)
+	}
+
+	if !bucket.Encryption {
+		t.Fatal(
+			"expected S3 encryption to be enabled",
+		)
+	}
+}
+
+func TestProviderRejectsResponseThatStillOmitsRequestedResource(
+	t *testing.T,
+) {
+	server := httptest.NewServer(
+		http.HandlerFunc(
+			func(w http.ResponseWriter, r *http.Request) {
+				response := generateResponse{
+					Response: `{"needs_clarification":false,"specification":{"provider":"aws","version":1,"vpcs":[{"name":"main-vpc","cidr":"10.0.0.0/16"}]}}`,
+				}
+
+				w.Header().Set(
+					"Content-Type",
+					"application/json",
+				)
+
+				_ = json.NewEncoder(
+					w,
+				).Encode(response)
+			},
+		),
+	)
+
+	defer server.Close()
+
+	provider := NewProvider(
+		server.URL,
+		"qwen2.5:7b",
+		server.Client(),
+	)
+
+	_, err := provider.ParseInfrastructure(
+		context.Background(),
+		ai.ParseRequest{
+			Command: "Create a VPC and an S3 bucket.",
+		},
+	)
+
+	if !errors.Is(
+		err,
+		ai.ErrInvalidProviderResponse,
+	) {
+		t.Fatalf(
+			"expected ErrInvalidProviderResponse, got %v",
+			err,
+		)
+	}
+
+	if !strings.Contains(
+		err.Error(),
+		"s3",
+	) {
+		t.Fatalf(
+			"expected error to identify missing S3 resource, got %v",
+			err,
+		)
+	}
+}
