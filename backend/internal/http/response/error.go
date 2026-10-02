@@ -13,6 +13,7 @@ const (
 	CodeNotFound           = "NOT_FOUND"
 	CodeConflict           = "CONFLICT"
 	CodeTooManyRequests    = "TOO_MANY_REQUESTS"
+	CodePayloadTooLarge    = "PAYLOAD_TOO_LARGE"
 	CodeInternalServer     = "INTERNAL_SERVER_ERROR"
 	CodeServiceUnavailable = "SERVICE_UNAVAILABLE"
 )
@@ -67,6 +68,15 @@ func TooManyRequests(c *gin.Context, message string) {
 		c,
 		http.StatusTooManyRequests,
 		CodeTooManyRequests,
+		message,
+	)
+}
+
+func PayloadTooLarge(c *gin.Context, message string) {
+	Error(
+		c,
+		http.StatusRequestEntityTooLarge,
+		CodePayloadTooLarge,
 		message,
 	)
 }

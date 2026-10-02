@@ -121,13 +121,27 @@ func main() {
 
 	router := gin.New()
 
-	routes.Setup(
+	terraformExecutionService := routes.Setup(
 		router,
 		cfg,
 		logger,
 		mongoDatabase,
 		redisClient,
 	)
+
+	// A terraform run cannot survive a restart of this process: the
+	// goroutine driving it is gone, but its database record would
+	// otherwise be left "running" forever. Fail those records before
+	// serving any request.
+	if err := terraformExecutionService.RecoverInterrupted(
+		appContext,
+	); err != nil {
+		logger.Error(
+			"failed to recover interrupted terraform runs",
+			"error",
+			err,
+		)
+	}
 
 	server := &http.Server{
 		Addr:    cfg.Address(),
@@ -190,6 +204,19 @@ func main() {
 	); err != nil {
 		logger.Error(
 			"http server shutdown error",
+			"error",
+			err,
+		)
+	}
+
+	// Give any terraform run that is still in flight a chance to
+	// reach a step boundary and persist its result before the
+	// database connection is closed underneath it.
+	if err := terraformExecutionService.Wait(
+		shutdownContext,
+	); err != nil {
+		logger.Warn(
+			"shutting down with terraform runs still in progress",
 			"error",
 			err,
 		)

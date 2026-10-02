@@ -15,6 +15,7 @@ type Config struct {
 	Redis     RedisConfig
 	JWT       JWTConfig
 	AI        AIConfig
+	Speech    SpeechConfig
 	Terraform TerraformConfig
 }
 
@@ -52,6 +53,16 @@ type AIConfig struct {
 	Provider  string
 	OllamaURL string
 	Model     string
+}
+
+type SpeechConfig struct {
+	Provider      string
+	WhisperURL    string
+	WhisperAPIKey string
+	Model         string
+	Language      string
+	TimeoutSec    int
+	MaxUploadMB   int
 }
 
 type TerraformConfig struct {
@@ -149,6 +160,37 @@ func Load() (Config, error) {
 			Model: getEnv(
 				"AI_MODEL",
 				"qwen2.5:7b",
+			),
+		},
+
+		Speech: SpeechConfig{
+			Provider: getEnv(
+				"SPEECH_PROVIDER",
+				"whisper",
+			),
+			WhisperURL: getEnv(
+				"SPEECH_WHISPER_URL",
+				"http://localhost:9000",
+			),
+			WhisperAPIKey: getEnv(
+				"SPEECH_WHISPER_API_KEY",
+				"",
+			),
+			Model: getEnv(
+				"SPEECH_MODEL",
+				"",
+			),
+			Language: getEnv(
+				"SPEECH_LANGUAGE",
+				"",
+			),
+			TimeoutSec: getEnvInt(
+				"SPEECH_TIMEOUT_SEC",
+				120,
+			),
+			MaxUploadMB: getEnvInt(
+				"SPEECH_MAX_UPLOAD_MB",
+				25,
 			),
 		},
 
@@ -295,6 +337,41 @@ func (c Config) Validate() error {
 		validationErrors = append(
 			validationErrors,
 			"AI_OLLAMA_URL cannot be empty when AI_PROVIDER is ollama",
+		)
+	}
+
+	if strings.TrimSpace(c.Speech.Provider) == "" {
+		validationErrors = append(
+			validationErrors,
+			"SPEECH_PROVIDER cannot be empty",
+		)
+	}
+
+	if strings.EqualFold(
+		c.Speech.Provider,
+		"whisper",
+	) &&
+		strings.TrimSpace(
+			c.Speech.WhisperURL,
+		) == "" {
+
+		validationErrors = append(
+			validationErrors,
+			"SPEECH_WHISPER_URL cannot be empty when SPEECH_PROVIDER is whisper",
+		)
+	}
+
+	if c.Speech.TimeoutSec <= 0 {
+		validationErrors = append(
+			validationErrors,
+			"SPEECH_TIMEOUT_SEC must be greater than 0",
+		)
+	}
+
+	if c.Speech.MaxUploadMB <= 0 {
+		validationErrors = append(
+			validationErrors,
+			"SPEECH_MAX_UPLOAD_MB must be greater than 0",
 		)
 	}
 

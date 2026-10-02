@@ -17,6 +17,8 @@ import (
 	"github.com/km-saifullah/infra-voice/backend/internal/http/middleware"
 	"github.com/km-saifullah/infra-voice/backend/internal/infrastructure"
 	"github.com/km-saifullah/infra-voice/backend/internal/project"
+	"github.com/km-saifullah/infra-voice/backend/internal/speech"
+	"github.com/km-saifullah/infra-voice/backend/internal/speech/whisper"
 	"github.com/km-saifullah/infra-voice/backend/internal/terraform"
 	"github.com/km-saifullah/infra-voice/backend/internal/user"
 )
@@ -27,7 +29,7 @@ func Setup(
 	logger *slog.Logger,
 	mongoDatabase *mongodb.Database,
 	redisClient *redisdb.Client,
-) {
+) *terraform.ExecutionService {
 	router.Use(
 		middleware.RequestID(),
 		middleware.Logger(logger),
@@ -127,6 +129,18 @@ func Setup(
 		projectService,
 	)
 
+	speechService := newSpeechService(
+		cfg,
+		logger,
+	)
+
+	speechHandler := handler.NewSpeechHandler(
+		speechService,
+		commandService,
+		aiService,
+		projectService,
+	)
+
 	terraformGenerator := terraform.NewGenerator()
 
 	terraformService := terraform.NewService(
@@ -136,6 +150,28 @@ func Setup(
 
 	terraformHandler := handler.NewTerraformHandler(
 		terraformService,
+	)
+
+	terraformRunRepository := terraform.NewRunRepository(
+		mongoDatabase,
+	)
+
+	terraformExecutor := terraform.NewCLIExecutor(
+		cfg.Terraform.BinaryPath,
+	)
+
+	terraformExecutionService := terraform.NewExecutionService(
+		cfg.Terraform,
+		terraformGenerator,
+		infrastructureService,
+		projectService,
+		terraformRunRepository,
+		terraformExecutor,
+		logger,
+	)
+
+	terraformExecutionHandler := handler.NewTerraformExecutionHandler(
+		terraformExecutionService,
 	)
 
 	api := router.Group(
@@ -206,6 +242,15 @@ func Setup(
 		projectHandler.Delete,
 	)
 
+	speechRoutes := projectRoutes.Group(
+		"/:id/speech",
+	)
+
+	speechRoutes.POST(
+		"/transcribe",
+		speechHandler.Transcribe,
+	)
+
 	commandRoutes := projectRoutes.Group(
 		"/:id/commands",
 	)
@@ -218,6 +263,11 @@ func Setup(
 	commandRoutes.GET(
 		"",
 		commandHandler.List,
+	)
+
+	commandRoutes.POST(
+		"/voice",
+		speechHandler.CreateVoiceCommand,
 	)
 
 	commandByIDRoutes := authenticatedRoutes.Group(
@@ -236,6 +286,11 @@ func Setup(
 	infrastructureRoutes.POST(
 		"/parse",
 		aiHandler.ParseInfrastructure,
+	)
+
+	infrastructureRoutes.POST(
+		"/parse/voice",
+		speechHandler.ParseVoiceInfrastructure,
 	)
 
 	infrastructureRoutes.POST(
@@ -276,6 +331,27 @@ func Setup(
 		"/generate",
 		terraformHandler.Generate,
 	)
+
+	terraformRunRoutes := terraformRoutes.Group(
+		"/runs",
+	)
+
+	terraformRunRoutes.POST(
+		"",
+		terraformExecutionHandler.Start,
+	)
+
+	terraformRunRoutes.GET(
+		"",
+		terraformExecutionHandler.List,
+	)
+
+	terraformRunRoutes.GET(
+		"/:run_id",
+		terraformExecutionHandler.Get,
+	)
+
+	return terraformExecutionService
 }
 
 func newAIService(
@@ -307,6 +383,47 @@ func newAIService(
 
 		return ai.NewService(
 			nil,
+		)
+	}
+}
+
+func newSpeechService(
+	cfg config.Config,
+	logger *slog.Logger,
+) *speech.Service {
+	maxUploadBytes := int64(
+		cfg.Speech.MaxUploadMB,
+	) * 1024 * 1024
+
+	switch strings.ToLower(
+		strings.TrimSpace(
+			cfg.Speech.Provider,
+		),
+	) {
+	case "whisper":
+		provider := whisper.NewProvider(
+			cfg.Speech.WhisperURL,
+			cfg.Speech.Model,
+			cfg.Speech.Language,
+			nil,
+			cfg.Speech.WhisperAPIKey,
+		)
+
+		return speech.NewService(
+			provider,
+			maxUploadBytes,
+		)
+
+	default:
+		logger.Error(
+			"unsupported speech provider configured",
+			"provider",
+			cfg.Speech.Provider,
+		)
+
+		return speech.NewService(
+			nil,
+			maxUploadBytes,
 		)
 	}
 }
