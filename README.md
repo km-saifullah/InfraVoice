@@ -207,32 +207,55 @@ Update `backend/.env` with your local values. Important settings
 include:
 
 ```env
+# Application
+APP_NAME=infra-voice-api
+APP_ENV=development
+
+# HTTP Server
 SERVER_HOST=0.0.0.0
 SERVER_PORT=8000
+SERVER_READ_TIMEOUT_SEC=15
+SERVER_WRITE_TIMEOUT_SEC=120
+SERVER_IDLE_TIMEOUT_SEC=60
 
-MONGODB_URI=your-mongodb-connection-string
-MONGODB_DATABASE=infra_voice
-
+# MongoDB Atlas
+MONGODB_URI=mongodb+srv://<username>:<password>@<cluster>.mongodb.net/?retryWrites=true&w=majority
+MONGODB_DATABASE=YOUR_DATABASE_NAME
+# Redis
 REDIS_URL=redis://localhost:6379
+REDIS_PASSWORD=
+REDIS_DB=0
 
+# Authentication
+JWT_SECRET=change-this-development-secret
+JWT_ACCESS_TOKEN_MINUTES=15
+JWT_REFRESH_TOKEN_DAYS=30
+
+# AI Ollama
 AI_PROVIDER=ollama
 AI_OLLAMA_URL=http://localhost:11434
 AI_MODEL=qwen2.5:7b
 
+# Whisper STT
 SPEECH_PROVIDER=whisper
 SPEECH_WHISPER_URL=http://localhost:9000
-SPEECH_WHISPER_API_KEY=your-whisper-api-key
+SPEECH_MODEL=whisper-1
+SPEECH_LANGUAGE=en
+SPEECH_TIMEOUT_SEC=120
+SPEECH_MAX_UPLOAD_MB=25
+SPEECH_WHISPER_API_KEY=whisper-YOUR_WHISPER_API_KEY
 
+# Terraform
 TERRAFORM_BINARY_PATH=terraform
 TERRAFORM_WORKSPACE_ROOT=./terraform/workspaces
+TERRAFORM_EXECUTION_TIMEOUT_SEC=300
 ```
 
-Use the actual values required by your environment. Do not commit
-`.env`.
+Use the actual values required by your environment. Do not commit `.env`.
 
 ### 3. Start local AI services
 
-Start Ollama and make sure the configured model is available:
+Start Ollama and make sure the configured model is available
 
 ```bash
 ollama pull qwen2.5:7b
@@ -261,7 +284,7 @@ The example configuration uses port `8000`.
 ### 5. Start the frontend
 
 In a separate terminal, navigate to the frontend directory and install
-dependencies:
+dependencies
 
 ```bash
 cd frontend
@@ -277,17 +300,17 @@ available development and production commands.
 
 Before testing the full workflow, verify that
 
-- The backend health endpoint responds.
-- MongoDB and Redis are reachable by the backend.
-- Ollama responds at the configured URL and has the selected model.
+- The backend health endpoint responds
+- MongoDB and Redis are reachable by the backend
+- Ollama responds at the configured URL and has the selected model
 - Whisper responds at the configured URL and accepts the configured
-  authentication key.
-- Terraform is installed and available to the backend.
+  authentication key
+- Terraform is installed and available to the backend
 - AWS credentials and permissions are configured for the intended test
-  environment.
+  environment
 
 Then submit a small, low-risk request, review the generated
-specification, and inspect the Terraform plan before applying it.
+specification and inspect the Terraform plan before applying it.
 
 ## Configuration
 
@@ -321,7 +344,7 @@ credentials, or `SPEECH_WHISPER_API_KEY`.
 ### Run Ollama locally (without Docker)
 
 InfraVoice uses Ollama as its local language-model runtime. In this setup,
-**Ollama runs directly on your computer—not in a Docker container**. The
+**Ollama runs directly on your computer not in a Docker container**. The
 backend connects to its local HTTP API, normally at
 `http://localhost:11434`.
 
@@ -338,7 +361,7 @@ Official installation instructions:
 
 #### 2. Start the Ollama service
 
-On Linux installations that use the system service, start and enable it:
+On Linux installations that use the system service, start and enable it
 
 ```bash
 sudo systemctl start ollama
@@ -452,14 +475,14 @@ the same host without publishing the HTTP port to the network. The
 persistent volume keeps the downloaded model and generated key when the
 container is recreated.
 
-Follow startup and wait for the ready message:
+Follow startup and wait for the ready message
 
 ```bash
 docker logs -f whisper
 ```
 
 For a fresh persistent installation, the image generates a Bearer key.
-Retrieve it without putting it in source control:
+Retrieve it without putting it in source control
 
 ```bash
 docker exec whisper whisper_manage --showkey
@@ -507,7 +530,7 @@ for model options and deployment guidance.
 
 ### Run the frontend
 
-Open a new terminal from the repository root:
+Open a new terminal from the repository root
 
 ```bash
 cd frontend
@@ -537,7 +560,7 @@ npm run
 
 ## Testing
 
-Run backend tests from the backend directory:
+Run backend tests from the backend directory
 
 ```bash
 go test ./...
