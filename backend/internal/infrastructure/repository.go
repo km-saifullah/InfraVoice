@@ -144,6 +144,209 @@ func (r *Repository) ListByProject(
 	return specifications, nil
 }
 
+type ResourceCounts struct {
+	Specifications int64
+	VPC            int64
+	EC2            int64
+	S3             int64
+	SNS            int64
+}
+
+type resourceCountsRow struct {
+	Specifications int64 `bson:"specifications"`
+	VPC            int64 `bson:"vpc"`
+	EC2            int64 `bson:"ec2"`
+	S3             int64 `bson:"s3"`
+	SNS            int64 `bson:"sns"`
+}
+
+func (r *Repository) AggregateResourceCounts(
+	ctx context.Context,
+	projectIDs []bson.ObjectID,
+) (ResourceCounts, error) {
+	if len(projectIDs) == 0 {
+		return ResourceCounts{}, nil
+	}
+
+	emptyArray := bson.A{}
+
+	cursor, err := r.collection.Aggregate(
+		ctx,
+		bson.A{
+			bson.D{
+				bson.E{
+					Key: "$match",
+					Value: bson.D{
+						bson.E{
+							Key: "project_id",
+							Value: bson.D{
+								bson.E{
+									Key:   "$in",
+									Value: projectIDs,
+								},
+							},
+						},
+					},
+				},
+			},
+			bson.D{
+				bson.E{
+					Key: "$project",
+					Value: bson.D{
+						bson.E{
+							Key: "vpc_count",
+							Value: bson.D{
+								bson.E{
+									Key: "$size",
+									Value: bson.D{
+										bson.E{
+											Key:   "$ifNull",
+											Value: bson.A{"$vpcs", emptyArray},
+										},
+									},
+								},
+							},
+						},
+						bson.E{
+							Key: "ec2_count",
+							Value: bson.D{
+								bson.E{
+									Key: "$size",
+									Value: bson.D{
+										bson.E{
+											Key:   "$ifNull",
+											Value: bson.A{"$ec2", emptyArray},
+										},
+									},
+								},
+							},
+						},
+						bson.E{
+							Key: "s3_count",
+							Value: bson.D{
+								bson.E{
+									Key: "$size",
+									Value: bson.D{
+										bson.E{
+											Key:   "$ifNull",
+											Value: bson.A{"$s3", emptyArray},
+										},
+									},
+								},
+							},
+						},
+						bson.E{
+							Key: "sns_count",
+							Value: bson.D{
+								bson.E{
+									Key: "$size",
+									Value: bson.D{
+										bson.E{
+											Key:   "$ifNull",
+											Value: bson.A{"$sns", emptyArray},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			bson.D{
+				bson.E{
+					Key: "$group",
+					Value: bson.D{
+						bson.E{
+							Key:   "_id",
+							Value: nil,
+						},
+						bson.E{
+							Key: "specifications",
+							Value: bson.D{
+								bson.E{
+									Key:   "$sum",
+									Value: 1,
+								},
+							},
+						},
+						bson.E{
+							Key: "vpc",
+							Value: bson.D{
+								bson.E{
+									Key:   "$sum",
+									Value: "$vpc_count",
+								},
+							},
+						},
+						bson.E{
+							Key: "ec2",
+							Value: bson.D{
+								bson.E{
+									Key:   "$sum",
+									Value: "$ec2_count",
+								},
+							},
+						},
+						bson.E{
+							Key: "s3",
+							Value: bson.D{
+								bson.E{
+									Key:   "$sum",
+									Value: "$s3_count",
+								},
+							},
+						},
+						bson.E{
+							Key: "sns",
+							Value: bson.D{
+								bson.E{
+									Key:   "$sum",
+									Value: "$sns_count",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	)
+
+	if err != nil {
+		return ResourceCounts{}, fmt.Errorf(
+			"failed to aggregate infrastructure resources: %w",
+			err,
+		)
+	}
+
+	defer cursor.Close(ctx)
+
+	var rows []resourceCountsRow
+
+	if err := cursor.All(
+		ctx,
+		&rows,
+	); err != nil {
+		return ResourceCounts{}, fmt.Errorf(
+			"failed to decode infrastructure resource aggregation: %w",
+			err,
+		)
+	}
+
+	if len(rows) == 0 {
+		return ResourceCounts{}, nil
+	}
+
+	row := rows[0]
+
+	return ResourceCounts{
+		Specifications: row.Specifications,
+		VPC:            row.VPC,
+		EC2:            row.EC2,
+		S3:             row.S3,
+		SNS:            row.SNS,
+	}, nil
+}
+
 func (r *Repository) UpdateByIDAndProject(
 	ctx context.Context,
 	specID bson.ObjectID,

@@ -189,9 +189,156 @@ func (r *RunRepository) ListByProject(
 	return runs, nil
 }
 
-// MarkInterrupted fails every run that is still queued or running.
-// It is meant to be called once at startup: a run cannot survive a
-// restart of the process that executes it.
+// RunCounts is a per-owner rollup used by the overview endpoint.
+type RunCounts struct {
+	Total    int64
+	ByStatus map[string]int64
+	ByType   map[string]int64
+	ByRegion map[string]int64
+}
+
+type runCountBucket struct {
+	ID    string `bson:"_id"`
+	Count int64  `bson:"count"`
+}
+
+type runCountFacetResult struct {
+	Total []struct {
+		Count int64 `bson:"count"`
+	} `bson:"total"`
+	ByStatus []runCountBucket `bson:"by_status"`
+	ByType   []runCountBucket `bson:"by_type"`
+	ByRegion []runCountBucket `bson:"by_region"`
+}
+
+func (r *RunRepository) CountByOwner(
+	ctx context.Context,
+	ownerID bson.ObjectID,
+) (RunCounts, error) {
+	cursor, err := r.collection.Aggregate(
+		ctx,
+		bson.A{
+			bson.D{
+				bson.E{
+					Key: "$match",
+					Value: bson.D{
+						bson.E{
+							Key:   "owner_id",
+							Value: ownerID,
+						},
+					},
+				},
+			},
+			bson.D{
+				bson.E{
+					Key: "$facet",
+					Value: bson.D{
+						bson.E{
+							Key: "total",
+							Value: bson.A{
+								bson.D{
+									bson.E{
+										Key:   "$count",
+										Value: "count",
+									},
+								},
+							},
+						},
+						bson.E{
+							Key:   "by_status",
+							Value: groupAndCountStage("$status"),
+						},
+						bson.E{
+							Key:   "by_type",
+							Value: groupAndCountStage("$type"),
+						},
+						bson.E{
+							Key:   "by_region",
+							Value: groupAndCountStage("$region"),
+						},
+					},
+				},
+			},
+		},
+	)
+
+	if err != nil {
+		return RunCounts{}, fmt.Errorf(
+			"failed to aggregate terraform runs: %w",
+			err,
+		)
+	}
+
+	defer cursor.Close(ctx)
+
+	var results []runCountFacetResult
+
+	if err := cursor.All(
+		ctx,
+		&results,
+	); err != nil {
+		return RunCounts{}, fmt.Errorf(
+			"failed to decode terraform run aggregation: %w",
+			err,
+		)
+	}
+
+	counts := RunCounts{
+		ByStatus: make(map[string]int64),
+		ByType:   make(map[string]int64),
+		ByRegion: make(map[string]int64),
+	}
+
+	if len(results) == 0 {
+		return counts, nil
+	}
+
+	result := results[0]
+
+	if len(result.Total) > 0 {
+		counts.Total = result.Total[0].Count
+	}
+
+	for _, bucket := range result.ByStatus {
+		counts.ByStatus[bucket.ID] = bucket.Count
+	}
+
+	for _, bucket := range result.ByType {
+		counts.ByType[bucket.ID] = bucket.Count
+	}
+
+	for _, bucket := range result.ByRegion {
+		counts.ByRegion[bucket.ID] = bucket.Count
+	}
+
+	return counts, nil
+}
+
+func groupAndCountStage(field string) bson.A {
+	return bson.A{
+		bson.D{
+			bson.E{
+				Key: "$group",
+				Value: bson.D{
+					bson.E{
+						Key:   "_id",
+						Value: field,
+					},
+					bson.E{
+						Key: "count",
+						Value: bson.D{
+							bson.E{
+								Key:   "$sum",
+								Value: 1,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
 func (r *RunRepository) MarkInterrupted(
 	ctx context.Context,
 	message string,

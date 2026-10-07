@@ -16,6 +16,7 @@ import (
 	"github.com/km-saifullah/infra-voice/backend/internal/http/handler"
 	"github.com/km-saifullah/infra-voice/backend/internal/http/middleware"
 	"github.com/km-saifullah/infra-voice/backend/internal/infrastructure"
+	"github.com/km-saifullah/infra-voice/backend/internal/overview"
 	"github.com/km-saifullah/infra-voice/backend/internal/project"
 	"github.com/km-saifullah/infra-voice/backend/internal/speech"
 	"github.com/km-saifullah/infra-voice/backend/internal/speech/whisper"
@@ -174,6 +175,17 @@ func Setup(
 		terraformExecutionService,
 	)
 
+	overviewService := overview.NewService(
+		projectRepository,
+		commandRepository,
+		infrastructureRepository,
+		terraformRunRepository,
+	)
+
+	overviewHandler := handler.NewOverviewHandler(
+		overviewService,
+	)
+
 	api := router.Group(
 		"/api/v1",
 	)
@@ -211,6 +223,11 @@ func Setup(
 	authenticatedRoutes.GET(
 		"/auth/me",
 		authHandler.Me,
+	)
+
+	authenticatedRoutes.GET(
+		"/overview",
+		overviewHandler.Get,
 	)
 
 	projectRoutes := authenticatedRoutes.Group(

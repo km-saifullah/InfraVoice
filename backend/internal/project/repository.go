@@ -208,3 +208,113 @@ func (r *Repository) DeleteByIDAndOwner(
 
 	return nil
 }
+
+// StatusCounts is a per-owner rollup used by the overview endpoint.
+type StatusCounts struct {
+	Total    int64
+	Active   int64
+	Archived int64
+}
+
+func (r *Repository) CountStatusesByOwner(
+	ctx context.Context,
+	ownerID bson.ObjectID,
+) (StatusCounts, error) {
+	total, err := r.collection.CountDocuments(
+		ctx,
+		bson.D{
+			bson.E{
+				Key:   "owner_id",
+				Value: ownerID,
+			},
+		},
+	)
+
+	if err != nil {
+		return StatusCounts{}, fmt.Errorf(
+			"failed to count projects: %w",
+			err,
+		)
+	}
+
+	active, err := r.collection.CountDocuments(
+		ctx,
+		bson.D{
+			bson.E{
+				Key:   "owner_id",
+				Value: ownerID,
+			},
+			bson.E{
+				Key:   "status",
+				Value: StatusActive,
+			},
+		},
+	)
+
+	if err != nil {
+		return StatusCounts{}, fmt.Errorf(
+			"failed to count active projects: %w",
+			err,
+		)
+	}
+
+	return StatusCounts{
+		Total:    total,
+		Active:   active,
+		Archived: total - active,
+	}, nil
+}
+
+func (r *Repository) ListIDsByOwner(
+	ctx context.Context,
+	ownerID bson.ObjectID,
+) ([]bson.ObjectID, error) {
+	cursor, err := r.collection.Find(
+		ctx,
+		bson.D{
+			bson.E{
+				Key:   "owner_id",
+				Value: ownerID,
+			},
+		},
+		options.Find().SetProjection(
+			bson.D{
+				bson.E{
+					Key:   "_id",
+					Value: 1,
+				},
+			},
+		),
+	)
+
+	if err != nil {
+		return nil, fmt.Errorf(
+			"failed to list project ids: %w",
+			err,
+		)
+	}
+
+	defer cursor.Close(ctx)
+
+	var rows []struct {
+		ID bson.ObjectID `bson:"_id"`
+	}
+
+	if err := cursor.All(
+		ctx,
+		&rows,
+	); err != nil {
+		return nil, fmt.Errorf(
+			"failed to decode project ids: %w",
+			err,
+		)
+	}
+
+	ids := make([]bson.ObjectID, len(rows))
+
+	for index, row := range rows {
+		ids[index] = row.ID
+	}
+
+	return ids, nil
+}
