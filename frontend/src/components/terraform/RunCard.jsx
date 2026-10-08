@@ -15,9 +15,9 @@ export function RunCard({ run }) {
       <button
         type="button"
         onClick={() => setIsOpen((open) => !open)}
-        className="flex w-full items-center justify-between px-4 py-3 text-left"
+        className="flex w-full flex-wrap items-center justify-between gap-x-3 gap-y-1 px-4 py-3 text-left"
       >
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <span className="font-display text-sm font-semibold uppercase tracking-wide text-mist-200">
             {run.type}
           </span>

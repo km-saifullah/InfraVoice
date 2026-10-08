@@ -91,12 +91,12 @@ export function TerraformRunsPage() {
     <div className="grid gap-6">
       <Card title="Run Terraform">
         <div className="flex flex-wrap items-end gap-3">
-          <label className="flex flex-col gap-1.5">
+          <label className="flex w-full flex-col gap-1.5 sm:w-auto">
             <span className="text-sm font-medium text-mist-200">Specification</span>
             <select
               value={selectedSpecId}
               onChange={(event) => setSelectedSpecId(event.target.value)}
-              className="rounded-md border border-ink-700 bg-ink-850 px-3 py-2 text-sm text-mist-100"
+              className="w-full rounded-md border border-ink-700 bg-ink-850 px-3 py-2 text-sm text-mist-100"
             >
               {specs.map((spec) => (
                 <option key={spec.id} value={spec.id}>
@@ -110,7 +110,7 @@ export function TerraformRunsPage() {
             label="AWS region"
             value={region}
             onChange={(event) => setRegion(event.target.value)}
-            className="w-44"
+            className="w-full sm:w-44"
           />
 
           <Button

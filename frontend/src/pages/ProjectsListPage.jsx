@@ -51,7 +51,7 @@ export function ProjectsListPage() {
     <div>
       <TopBar title="Projects" subtitle="A project groups one environment's commands, specs and infrastructure." />
 
-      <div className="mx-auto grid max-w-5xl gap-6 px-6 py-8 lg:grid-cols-[1fr_320px]">
+      <div className="mx-auto grid max-w-5xl gap-6 px-4 py-6 sm:px-6 sm:py-8 lg:grid-cols-[1fr_320px]">
         <div>
           {isLoading && (
             <div className="flex justify-center py-16">

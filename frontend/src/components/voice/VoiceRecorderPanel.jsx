@@ -92,7 +92,7 @@ export function VoiceRecorderPanel({ projectId, onParsed }) {
             </div>
           )}
 
-          <div className="flex w-full gap-2">
+          <div className="flex w-full flex-col gap-2 sm:flex-row">
             <Button variant="ghost" onClick={handleReset} disabled={isWorking}>
               Re-record
             </Button>
@@ -100,14 +100,14 @@ export function VoiceRecorderPanel({ projectId, onParsed }) {
               variant="secondary"
               onClick={handlePreview}
               isLoading={isWorking}
-              className="flex-1"
+              className="sm:flex-1"
             >
               Preview transcript
             </Button>
             <Button
               onClick={handleSend}
               isLoading={isWorking}
-              className="flex-1"
+              className="sm:flex-1"
             >
               Send as command
             </Button>

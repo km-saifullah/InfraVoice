@@ -82,7 +82,7 @@ export function VoiceCommandPage() {
           <p className="mb-2 text-xs font-medium uppercase text-mist-500">Or type a command</p>
           <div className="flex gap-2">
             <TextArea
-              className="flex-1"
+              className="min-w-0 flex-1"
               rows={2}
               value={typedCommand}
               onChange={(event) => setTypedCommand(event.target.value)}

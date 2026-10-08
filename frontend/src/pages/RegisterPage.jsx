@@ -23,7 +23,7 @@ export function RegisterPage() {
 
     try {
       await register(name, email, password)
-      navigate('/projects', { replace: true })
+      navigate('/overview', { replace: true })
     } catch (caughtError) {
       setError(caughtError.message)
     } finally {

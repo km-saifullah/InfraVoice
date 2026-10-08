@@ -149,9 +149,9 @@ export function SpecificationsPage() {
             <p className="mb-2 text-xs font-medium uppercase text-mist-500">
               Preview Terraform files
             </p>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <TextField
-                className="w-48"
+                className="w-full sm:w-48"
                 value={region}
                 onChange={(event) => setRegion(event.target.value)}
                 placeholder="us-east-1"

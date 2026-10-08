@@ -23,7 +23,7 @@ export function LoginPage() {
 
     try {
       await login(email, password)
-      navigate(location.state?.from?.pathname || '/projects', { replace: true })
+      navigate(location.state?.from?.pathname || '/overview', { replace: true })
     } catch (caughtError) {
       setError(caughtError.message)
     } finally {

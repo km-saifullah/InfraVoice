@@ -3,6 +3,7 @@ import { ProtectedRoute } from './components/layout/ProtectedRoute'
 import { AppLayout } from './components/layout/AppLayout'
 import { LoginPage } from './pages/LoginPage'
 import { RegisterPage } from './pages/RegisterPage'
+import { OverviewPage } from './pages/OverviewPage'
 import { ProjectsListPage } from './pages/ProjectsListPage'
 import { ProjectLayout } from './pages/ProjectLayout'
 import { VoiceCommandPage } from './pages/VoiceCommandPage'
@@ -18,7 +19,8 @@ export const router = createBrowserRouter([
       {
         element: <AppLayout />,
         children: [
-          { path: '/', element: <Navigate to="/projects" replace /> },
+          { path: '/', element: <Navigate to="/overview" replace /> },
+          { path: '/overview', element: <OverviewPage /> },
           { path: '/projects', element: <ProjectsListPage /> },
           {
             path: '/projects/:projectId',

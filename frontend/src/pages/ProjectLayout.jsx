@@ -44,8 +44,8 @@ export function ProjectLayout() {
     <div>
       <TopBar title={project.name} subtitle={project.description} />
 
-      <div className="border-b border-ink-800 px-6">
-        <nav className="flex gap-6">
+      <div className="border-b border-ink-800 px-4 sm:px-6">
+        <nav className="scrollbar-thin flex gap-6 overflow-x-auto whitespace-nowrap">
           {TABS.map((tab) => (
             <NavLink
               key={tab.to}
@@ -64,7 +64,7 @@ export function ProjectLayout() {
         </nav>
       </div>
 
-      <div className="px-6 py-6">
+      <div className="px-4 py-5 sm:px-6 sm:py-6">
         <Outlet context={{ project }} />
       </div>
     </div>

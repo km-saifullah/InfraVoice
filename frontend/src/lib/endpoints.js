@@ -13,6 +13,11 @@ export const AuthApi = {
   me: () => get("/api/v1/auth/me"),
 };
 
+// ---- Overview (dashboard rollup shown right after sign-in) -----------------
+export const OverviewApi = {
+  get: () => get("/api/v1/overview"),
+};
+
 // ---- Projects --------------------------------------------------------------
 export const ProjectsApi = {
   create: (name, description) =>

@@ -1,8 +1,8 @@
 function ResourceRow({ label, children }) {
   return (
-    <div className="flex items-center justify-between border-b border-ink-800 py-2 text-sm last:border-0">
+    <div className="flex items-center justify-between gap-3 border-b border-ink-800 py-2 text-sm last:border-0">
       <span className="text-mist-400">{label}</span>
-      <span className="font-mono text-mist-100">{children}</span>
+      <span className="min-w-0 break-all text-right font-mono text-mist-100">{children}</span>
     </div>
   );
 }
